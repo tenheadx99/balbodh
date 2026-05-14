@@ -6,6 +6,7 @@ import '../abc/bubble_pop_game.dart';
 import '../math/math_hub_screen.dart';
 import '../stickers/sticker_book_screen.dart';
 import '../dashboard/parent_dashboard.dart';
+import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final ProgressService _progress = ProgressService();
@@ -55,25 +56,50 @@ class HomeScreen extends StatelessWidget {
                     Positioned(
                       right: 0,
                       top: 0,
-                      child: GestureDetector(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ParentDashboard(
-                                progressService: _progress),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => SettingsScreen(),
+                              ),
+                            ),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Center(
+                                child: Icon(Icons.settings,
+                                    color: AppColors.textDark, size: 22),
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(14),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ParentDashboard(
+                                    progressService: _progress),
+                              ),
+                            ),
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Center(
+                                child: Icon(Icons.admin_panel_settings,
+                                    color: AppColors.textDark, size: 22),
+                              ),
+                            ),
                           ),
-                          child: const Center(
-                            child: Icon(Icons.settings,
-                                color: AppColors.textDark, size: 26),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                   ],

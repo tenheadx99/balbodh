@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
+import '../../core/audio/sound_effect_service.dart';
 import '../../games/reward_overlay.dart';
 import '../../models/math_question.dart';
 
@@ -14,6 +15,7 @@ class CountingGame extends StatefulWidget {
 
 class _CountingGameState extends State<CountingGame> {
   final AudioService _audio = AudioService();
+  final SoundEffectService _sfx = SoundEffectService();
   final Random _random = Random();
 
   int _level = 1;
@@ -50,13 +52,16 @@ class _CountingGameState extends State<CountingGame> {
       _streak++;
       _stars++;
       _correctCount++;
+      _sfx.playCorrect();
       _audio.speakEnglish('Correct! ${_current!.correctAnswer}!');
 
       if (_streak >= 3) {
         _rewardMessage = '🔥 Amazing streak!';
         _stars++;
+        _sfx.playStreak();
       } else {
         _rewardMessage = '⭐ Great!';
+        _sfx.playStar();
       }
 
       _showReward = true;
@@ -73,6 +78,7 @@ class _CountingGameState extends State<CountingGame> {
       });
     } else {
       _streak = 0;
+      _sfx.playWrong();
       _audio.playTryAgain();
       Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) {

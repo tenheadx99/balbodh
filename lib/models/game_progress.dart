@@ -39,4 +39,22 @@ class GameProgress {
 
   void addStar() => totalStars++;
   void addGamePlayed() => totalGamesPlayed++;
+
+  Map<String, dynamic> toJson() => {
+    'module': module,
+    'masteredLetters': masteredLetters.toList(),
+    'attempts': attempts,
+    'correctCount': correctCount,
+    'totalStars': totalStars,
+    'totalGamesPlayed': totalGamesPlayed,
+  };
+
+  factory GameProgress.fromJson(Map<String, dynamic> json) => GameProgress(
+    module: json['module'] as String,
+    masteredLetters: (json['masteredLetters'] as List).toSet().cast<String>(),
+    attempts: (json['attempts'] as Map).map((k, v) => MapEntry(k as String, v as int)),
+    correctCount: (json['correctCount'] as Map).map((k, v) => MapEntry(k as String, v as int)),
+    totalStars: json['totalStars'] as int? ?? 0,
+    totalGamesPlayed: json['totalGamesPlayed'] as int? ?? 0,
+  );
 }

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
+import '../../core/audio/sound_effect_service.dart';
 import '../../games/bubble_widget.dart';
 import '../../games/reward_overlay.dart';
 import '../../models/bubble_letter.dart';
@@ -22,11 +23,12 @@ class BubblePopGame extends StatefulWidget {
 class _BubblePopGameState extends State<BubblePopGame>
     with TickerProviderStateMixin {
   final AudioService _audio = AudioService();
+  final SoundEffectService _sfx = SoundEffectService();
   final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   GamePhase _phase = GamePhase.intro;
-  List<_BubbleData> _bubbles = [];
+  final List<_BubbleSprite> _bubbles = [];
   BubbleLetter? _currentTarget;
   String _introLetter = '';
 
@@ -36,6 +38,7 @@ class _BubblePopGameState extends State<BubblePopGame>
   int _wrongAttempts = 0;
   int _currentLevel = 0;
   int _levelSize = 3;
+  int _nextBubbleId = 0;
 
   bool _hintActive = false;
   bool _showReward = false;
@@ -46,6 +49,14 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   Timer? _spawnTimer;
   Timer? _floatTimer;
+  Timer? _inactivityTimer;
+
+  int _inactivitySeconds = 0;
+  double _screenW = 400;
+  double _screenH = 800;
+
+  String get _moduleKey =>
+      widget.module == ModuleType.hindi ? 'hindi' : 'abc';
 
   List<BubbleLetter> _allLetters = [];
   List<BubbleLetter> _sessionLetters = [];
@@ -63,14 +74,17 @@ class _BubblePopGameState extends State<BubblePopGame>
       CurvedAnimation(parent: _bgController, curve: Curves.easeInOut),
     );
 
-    _initGame();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _screenW = MediaQuery.of(context).size.width;
+      _screenH = MediaQuery.of(context).size.height;
+      _initGame();
+    });
   }
 
   void _initGame() {
     _allLetters = widget.module == ModuleType.hindi
         ? BubbleLetter.hindiLetters
         : BubbleLetter.abcLetters;
-
     _currentLevel = 0;
     _loadNextLevel();
   }
@@ -88,11 +102,11 @@ class _BubblePopGameState extends State<BubblePopGame>
     _sessionLetterIndex = 0;
     _correctCount = 0;
     _levelSize = min(_levelSize + 1, 5);
-
     _startIntro();
   }
 
   void _startIntro() {
+    _cancelAllTimers();
     if (_sessionLetterIndex >= _sessionLetters.length) {
       _currentLevel++;
       _loadNextLevel();
@@ -103,10 +117,10 @@ class _BubblePopGameState extends State<BubblePopGame>
     _introLetter = _currentTarget!.letter;
     _phase = GamePhase.intro;
     _hintActive = false;
-    _bubbles = [];
+    _bubbles.clear();
+    _inactivitySeconds = 0;
 
     setState(() {});
-
     _speakIntro();
 
     Future.delayed(const Duration(seconds: 2), () {
@@ -117,23 +131,18 @@ class _BubblePopGameState extends State<BubblePopGame>
   Future<void> _speakIntro() async {
     final target = _currentTarget!;
     if (widget.module == ModuleType.hindi) {
-      final msg = 'ढूंढो अक्षर ${target.letter}';
-      await _audio.speakHindi(msg);
+      await _audio.speakHindi('ढूंढो अक्षर ${target.letter}');
+      await _audio.playLetterSound(target.letter, 'hindi');
+      if (target.objectName.isNotEmpty) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        await _audio.speakHindi('${target.letter} for ${target.objectName}');
+      }
     } else {
-      final msg = 'Find the letter ${target.letter}';
-      await _audio.speakEnglish(msg);
-    }
-    await _audio.playLetterSound(target.letter,
-        widget.module == ModuleType.hindi ? 'hindi' : 'abc');
-    if (target.objectName.isNotEmpty) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final objMsg = widget.module == ModuleType.hindi
-          ? '${target.letter} for ${target.objectName}'
-          : '${target.letter} for ${target.objectName}';
-      if (widget.module == ModuleType.hindi) {
-        await _audio.speakHindi(objMsg);
-      } else {
-        await _audio.speakEnglish(objMsg);
+      await _audio.speakEnglish('Find the letter ${target.letter}');
+      await _audio.playLetterSound(target.letter, 'abc');
+      if (target.objectName.isNotEmpty) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        await _audio.speakEnglish('${target.letter} for ${target.objectName}');
       }
     }
   }
@@ -141,72 +150,104 @@ class _BubblePopGameState extends State<BubblePopGame>
   void _startPlaying() {
     _phase = GamePhase.playing;
     _wrongAttempts = 0;
-    _spawnBubbles();
-    _startSpawning();
+    _inactivitySeconds = 0;
+    _bubbles.clear();
+    _spawnInitialBubbles();
+    _startSpawnTimer();
+    _startFloatTimer();
+    _startInactivityTimer();
     setState(() {});
   }
 
-  void _spawnBubbles() {
-    _bubbles = [];
-    final target = _currentTarget!;
-
-    final correctBubble = _BubbleData(
-      letter: target,
-      x: _random.nextDouble() * (MediaQuery.of(context).size.width - 100) + 50,
-      y: MediaQuery.of(context).size.height + 50,
-      color: AppColors.bubbleColors[_random.nextInt(AppColors.bubbleColors.length)],
-      isTarget: true,
-    );
-    _bubbles.add(correctBubble);
-
+  void _spawnInitialBubbles() {
+    final targetCount = 1;
     final distractorCount = min(_currentLevel + 2, 4);
-    final distractors = <BubbleLetter>[];
-    final pool = _allLetters
-        .where((l) => l.letter != target.letter)
-        .toList()
-      ..shuffle();
+    final total = targetCount + distractorCount;
 
-    for (int i = 0; i < distractorCount && i < pool.length; i++) {
-      distractors.add(pool[i]);
+    for (int i = 0; i < total; i++) {
+      _addBubble(
+        isTarget: i == 0,
+        yOffset: _random.nextDouble() * _screenH * 0.3,
+      );
     }
-
-    for (final d in distractors) {
-      _bubbles.add(_BubbleData(
-        letter: d,
-        x: _random.nextDouble() * (MediaQuery.of(context).size.width - 100) + 50,
-        y: MediaQuery.of(context).size.height + 50 +
-            _random.nextDouble() * 100,
-        color:
-            AppColors.bubbleColors[_random.nextInt(AppColors.bubbleColors.length)],
-        isTarget: false,
-      ));
-    }
-
-    _bubbles.shuffle();
-    _startFloating();
   }
 
-  void _startSpawning() {
+  void _addBubble({bool isTarget = false, double yOffset = 0}) {
+    final target = _currentTarget!;
+    final letter = isTarget
+        ? target
+        : _randomDistractor(target);
+
+    _bubbles.add(_BubbleSprite(
+      id: _nextBubbleId++,
+      letter: letter,
+      x: 50 + _random.nextDouble() * (_screenW - 150),
+      y: _screenH + 50 + yOffset,
+      speed: 1.0 + _random.nextDouble() * 0.8 + _currentLevel * 0.05,
+      wobblePhase: _random.nextDouble() * pi * 2,
+      wobbleAmp: 0.3 + _random.nextDouble() * 0.4,
+      color: AppColors.bubbleColors[_random.nextInt(AppColors.bubbleColors.length)],
+      isTarget: isTarget,
+    ));
+  }
+
+  BubbleLetter _randomDistractor(BubbleLetter exclude) {
+    final pool = _allLetters.where((l) => l.letter != exclude.letter).toList();
+    return pool[_random.nextInt(pool.length)];
+  }
+
+  void _startSpawnTimer() {
     _spawnTimer?.cancel();
-    _spawnTimer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (_phase == GamePhase.playing && mounted) {
-        _spawnBubbles();
-      }
+    _spawnTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_phase != GamePhase.playing || !mounted) return;
+      _addBubble(isTarget: false);
+      if (_random.nextBool()) _addBubble(isTarget: false);
+      setState(() {});
     });
   }
 
-  void _startFloating() {
+  void _startFloatTimer() {
     _floatTimer?.cancel();
     _floatTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (_phase != GamePhase.playing || !mounted) return;
       setState(() {
         for (final b in _bubbles) {
-          b.y -= 1.2 + _currentLevel * 0.1;
-          b.x += sin(b.y * 0.02) * 0.5;
+          final wobble = sin(b.y * 0.02 + b.wobblePhase) * b.wobbleAmp;
+          b.y -= b.speed;
+          b.x += wobble;
         }
-        _bubbles.removeWhere((b) => b.y < -100);
+        _bubbles.removeWhere((b) => b.y < -120);
       });
     });
+  }
+
+  void _startInactivityTimer() {
+    _inactivityTimer?.cancel();
+    _inactivitySeconds = 0;
+    _inactivityTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_phase != GamePhase.playing || !mounted) return;
+      _inactivitySeconds++;
+      if (_inactivitySeconds >= 8 && !_hintActive) {
+        _hintActive = true;
+        _audio.speakEnglish('Look for ${_currentTarget!.letter}');
+        setState(() {});
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted) {
+            _hintActive = false;
+            setState(() {});
+          }
+        });
+      }
+    });
+  }
+
+  void _cancelAllTimers() {
+    _spawnTimer?.cancel();
+    _spawnTimer = null;
+    _floatTimer?.cancel();
+    _floatTimer = null;
+    _inactivityTimer?.cancel();
+    _inactivityTimer = null;
   }
 
   void _onCorrectPop() {
@@ -216,22 +257,26 @@ class _BubblePopGameState extends State<BubblePopGame>
     _correctCount++;
     _streak++;
     _stars++;
-    _progress.recordAttempt(
-        widget.module == ModuleType.hindi ? 'hindi' : 'abc',
-        _currentTarget!.letter,
-        true);
-    _progress.addStar(widget.module == ModuleType.hindi ? 'hindi' : 'abc');
 
-    _audio.playEncouragement();
+    final mod = _moduleKey;
+    _progress.recordAttempt(mod, _currentTarget!.letter, true);
+    _progress.addStar(mod);
+
+    _sfx.playCorrect();
 
     if (_streak >= 3) {
       _rewardMessage = '🔥 Amazing!\n$_streak in a row!';
       _stars++;
+      _sfx.playStreak();
     } else {
       _rewardMessage = '⭐ Great!';
+      _sfx.playStar();
     }
 
+    _audio.playEncouragement(hindi: widget.module == ModuleType.hindi);
+
     _showReward = true;
+    _cancelAllTimers();
     setState(() {});
 
     Future.delayed(const Duration(seconds: 1), () {
@@ -254,15 +299,13 @@ class _BubblePopGameState extends State<BubblePopGame>
 
     _streak = 0;
     _wrongAttempts++;
-    _progress.recordAttempt(
-        widget.module == ModuleType.hindi ? 'hindi' : 'abc',
-        _currentTarget!.letter,
-        false);
+    _progress.recordAttempt(_moduleKey, _currentTarget!.letter, false);
 
-    _audio.playTryAgain();
+    _sfx.playWrong();
+    _audio.playTryAgain(hindi: widget.module == ModuleType.hindi);
     setState(() {});
 
-    if (_wrongAttempts >= 3) {
+    if (_wrongAttempts >= 3 && !_hintActive) {
       _hintActive = true;
       _audio.speakEnglish('Look for the letter ${_currentTarget!.letter}');
       setState(() {});
@@ -270,8 +313,9 @@ class _BubblePopGameState extends State<BubblePopGame>
   }
 
   void _showLevelComplete() {
+    _sfx.playFanfare();
     _showReward = true;
-    _rewardMessage = '🎉 Level Complete!\nYou learned $_levelSize letters!';
+    _rewardMessage = '🎉 Level $_currentLevel Complete!';
     setState(() {});
 
     Future.delayed(const Duration(seconds: 2), () {
@@ -284,15 +328,17 @@ class _BubblePopGameState extends State<BubblePopGame>
   }
 
   void _showCompletion() {
+    _cancelAllTimers();
     _phase = GamePhase.complete;
     _showReward = true;
-    _rewardMessage = '🎉 You did it!\nAll letters mastered!';
+    _rewardMessage = '🎉 All letters mastered!';
     setState(() {});
   }
 
   void _onHint() {
     if (_phase != GamePhase.playing) return;
     _hintActive = true;
+    _sfx.playTap();
     _audio.speakEnglish('Look for ${_currentTarget!.letter}');
     setState(() {});
 
@@ -306,8 +352,7 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   @override
   void dispose() {
-    _spawnTimer?.cancel();
-    _floatTimer?.cancel();
+    _cancelAllTimers();
     _bgController.dispose();
     _audio.dispose();
     super.dispose();
@@ -316,42 +361,35 @@ class _BubblePopGameState extends State<BubblePopGame>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GestureDetector(
-        onTap: () {
-          if (_phase == GamePhase.complete) {
-            Navigator.of(context).pop();
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.lerp(
-                  AppColors.backgroundStart,
-                  AppColors.backgroundEnd,
-                  _bgAnimation.value,
-                )!,
-                Color.lerp(
-                  AppColors.backgroundEnd,
-                  AppColors.backgroundStart,
-                  _bgAnimation.value,
-                )!,
-              ],
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.lerp(
+                AppColors.backgroundStart,
+                AppColors.backgroundEnd,
+                _bgAnimation.value,
+              )!,
+              Color.lerp(
+                AppColors.backgroundEnd,
+                AppColors.backgroundStart,
+                _bgAnimation.value,
+              )!,
+            ],
           ),
-          child: SafeArea(
-            child: Stack(
-              children: [
-                _buildGameArea(),
-                _buildTopBar(),
-                if (_phase == GamePhase.intro) _buildIntroOverlay(),
-                if (_showReward) _buildRewardOverlay(),
-                if (_phase == GamePhase.complete && !_showReward)
-                  _buildCompletionScreen(),
-              ],
-            ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              _buildGameArea(),
+              _buildTopBar(),
+              if (_phase == GamePhase.intro) _buildIntroOverlay(),
+              if (_showReward) _buildRewardOverlay(),
+              if (_phase == GamePhase.complete && !_showReward)
+                _buildCompletionScreen(),
+            ],
           ),
         ),
       ),
@@ -362,7 +400,7 @@ class _BubblePopGameState extends State<BubblePopGame>
     return Stack(
       children: [
         ..._bubbles.map((b) => BubbleWidget(
-              key: ValueKey('${b.letter.letter}_${b.x}_${b.y}'),
+              key: ValueKey(b.id),
               letter: b.letter,
               xPosition: b.x,
               yPosition: b.y,
@@ -379,12 +417,20 @@ class _BubblePopGameState extends State<BubblePopGame>
             left: 0,
             right: 0,
             child: Center(
-              child: Text(
-                'Find: ${_currentTarget?.displayName ?? ""}',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Find: ${_currentTarget?.displayName ?? ""}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark,
+                  ),
                 ),
               ),
             ),
@@ -429,24 +475,71 @@ class _BubblePopGameState extends State<BubblePopGame>
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.arrow_back, size: 32, color: AppColors.textDark),
+              icon: const Icon(Icons.arrow_back,
+                  size: 32, color: AppColors.textDark),
               onPressed: () => Navigator.of(context).pop(),
             ),
             const Spacer(),
-            _buildStarDisplay(),
+            _badgeContainer(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('⭐', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 4),
+                  Text('$_stars',
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark)),
+                ],
+              ),
+            ),
+            if (_streak >= 2) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('🔥', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 4),
+                    Text('$_streak',
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(width: 8),
-            _buildStreakDisplay(),
-            const SizedBox(width: 8),
-            _buildLevelBadge(),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text('Level ${_currentLevel + 1}',
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStarDisplay() {
+  Widget _badgeContainer(Widget child) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
@@ -458,65 +551,7 @@ class _BubblePopGameState extends State<BubblePopGame>
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('⭐', style: TextStyle(fontSize: 20)),
-          const SizedBox(width: 4),
-          Text(
-            '$_stars',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStreakDisplay() {
-    if (_streak < 2) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.orange.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('🔥', style: TextStyle(fontSize: 16)),
-          const SizedBox(width: 4),
-          Text(
-            '$_streak',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLevelBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.secondary.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        'Level ${_currentLevel + 1}',
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
-      ),
+      child: child,
     );
   }
 
@@ -530,10 +565,7 @@ class _BubblePopGameState extends State<BubblePopGame>
           builder: (context, value, child) {
             return Opacity(
               opacity: value,
-              child: Transform.scale(
-                scale: value,
-                child: child,
-              ),
+              child: Transform.scale(scale: value, child: child),
             );
           },
           child: Column(
@@ -566,7 +598,7 @@ class _BubblePopGameState extends State<BubblePopGame>
               ),
               const SizedBox(height: 24),
               const Text(
-                'Find this letter!',
+                'Pop the right bubble!',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
@@ -594,10 +626,7 @@ class _BubblePopGameState extends State<BubblePopGame>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              '🎉',
-              style: TextStyle(fontSize: 80),
-            ),
+            const Text('🎉', style: TextStyle(fontSize: 80)),
             const SizedBox(height: 24),
             Text(
               'All Letters\nMastered!',
@@ -618,10 +647,9 @@ class _BubblePopGameState extends State<BubblePopGame>
             Text(
               'You earned $_stars stars! ⭐',
               style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Colors.white70,
-              ),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white70),
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
@@ -643,17 +671,25 @@ class _BubblePopGameState extends State<BubblePopGame>
   }
 }
 
-class _BubbleData {
+class _BubbleSprite {
+  final int id;
   final BubbleLetter letter;
   double x;
   double y;
+  final double speed;
+  final double wobblePhase;
+  final double wobbleAmp;
   final Color color;
   final bool isTarget;
 
-  _BubbleData({
+  _BubbleSprite({
+    required this.id,
     required this.letter,
     required this.x,
     required this.y,
+    required this.speed,
+    required this.wobblePhase,
+    required this.wobbleAmp,
     required this.color,
     required this.isTarget,
   });
