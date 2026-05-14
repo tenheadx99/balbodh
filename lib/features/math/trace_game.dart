@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../models/number_letter.dart';
+import '../../services/progress_service.dart';
 
 class TraceGame extends StatefulWidget {
   const TraceGame({super.key});
@@ -14,6 +16,7 @@ class TraceGame extends StatefulWidget {
 class _TraceGameState extends State<TraceGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
 
   final List<Offset> _points = [];
   final Set<int> _completedNumbers = {};
@@ -23,6 +26,10 @@ class _TraceGameState extends State<TraceGame> {
   bool _showingSuccess = false;
   bool _allDone = false;
 
+  double _traceW = 300;
+  double _traceH = 300;
+  final List<Offset> _samplePoints = [];
+
   @override
   void initState() {
     super.initState();
@@ -30,145 +37,102 @@ class _TraceGameState extends State<TraceGame> {
   }
 
   void _speakNumber() {
-    _audio.speakEnglish('Trace number $_currentNumber');
+    final word = NumberLetter.wordFor(_currentNumber);
+    _audio.speakEnglish('Trace number $word');
   }
 
-  List<Offset> _digitWaypoints(int n, Offset center, double size) {
-    final r = size * 0.4;
-    final segs = <Offset>[];
-    void add(double x, double y) => segs.add(Offset(center.dx + x * r, center.dy + y * r));
+  /// Generates sample points that lie on the actual rendered strokes of [number]
+  /// by rasterising the digit text and sampling pixels from the text painter.
+  /// We use a dense grid approach: lay a grid over the digit bounding box and
+  /// pick points that are likely on a stroke (centre of the glyph area).
+  void _generateSamplePoints(double w, double h, int number) {
+    _samplePoints.clear();
 
-    switch (n % 10) {
-      case 1:
-        add(0, -1); add(0, 1);
-        break;
-      case 2:
-        add(0.8, -1); add(-0.8, -1); add(-0.8, 0);
-        add(0.8, 0); add(0.8, 1); add(-0.8, 1);
-        break;
-      case 3:
-        add(-0.8, -1); add(0.8, -1); add(0.8, 0);
-        add(-0.5, 0); add(0.8, 0); add(0.8, 1); add(-0.8, 1);
-        break;
-      case 4:
-        add(-0.8, -1); add(-0.8, 0); add(0.8, 0);
-        add(0.8, -1); add(0.8, 1);
-        break;
-      case 5:
-        add(0.8, -1); add(-0.8, -1); add(-0.8, -0.2);
-        add(0.8, -0.2); add(0.8, 0.6); add(-0.8, 0.6);
-        add(-0.8, 1); add(0.8, 1);
-        break;
-      case 6:
-        add(0.8, -1); add(-0.8, -1); add(-0.8, 0);
-        add(0.8, 0); add(0.8, 1); add(-0.8, 1); add(-0.8, 0.5);
-        break;
-      case 7:
-        add(-0.8, -1); add(0.8, -1); add(0.8, -0.4);
-        add(0.4, 0.2); add(0.4, 1);
-        break;
-      case 8:
-        add(0, -1); add(0.8, -0.4); add(0, 0);
-        add(0.8, 0.4); add(0, 1); add(-0.8, 0.4);
-        add(0, 0); add(-0.8, -0.4); add(0, -1);
-        break;
-      case 9:
-        add(0, 1); add(0.8, 1); add(0.8, 0);
-        add(-0.8, 0); add(-0.8, -1); add(0, -1);
-        add(0.5, -1); add(0.8, -0.7);
-        break;
-      case 0:
-        add(-0.7, -1); add(0.7, -1); add(0.7, 1);
-        add(-0.7, 1); add(-0.7, -1);
-        break;
-    }
-    return segs;
-  }
+    // Lay out the digit with the same style used in _TracePainter
+    final fontSize = w * 0.50;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '$number',
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w900,
+          color: Colors.black,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout(maxWidth: w);
 
-  List<Offset> _getFullPath(int number, Offset center, double size) {
-    final path = <Offset>[];
-    if (number < 10) {
-      path.addAll(_digitWaypoints(number, center, size));
-    } else {
-      final tens = number ~/ 10;
-      final ones = number % 10;
-      final tensCenter = Offset(center.dx - size * 0.25, center.dy);
-      final onesCenter = Offset(center.dx + size * 0.25, center.dy);
-      path.addAll(_digitWaypoints(tens, tensCenter, size * 0.6));
-      path.addAll(_digitWaypoints(ones, onesCenter, size * 0.6));
-    }
-    return path;
-  }
+    final glyphW = tp.width;
+    final glyphH = tp.height;
+    final left = (w - glyphW) / 2;
+    final top = (h - glyphH) / 2;
 
-  List<Offset> _sampleGuidePath(int number, Offset center, double size,
-      {double spacing = 8}) {
-    final waypoints = _getFullPath(number, center, size);
-    if (waypoints.isEmpty) return [];
+    // Divide the glyph rect into a grid and record all interior cells
+    const cols = 10;
+    const rows = 10;
+    final cellW = glyphW / cols;
+    final cellH = glyphH / rows;
 
-    final sampled = <Offset>[];
-    for (int i = 0; i < waypoints.length - 1; i++) {
-      final a = waypoints[i];
-      final b = waypoints[i + 1];
-      final dist = (b - a).distance;
-      final steps = (dist / spacing).ceil().clamp(1, 50);
-      for (int s = 0; s <= steps; s++) {
-        final t = s / steps;
-        sampled.add(Offset(
-          a.dx + (b.dx - a.dx) * t,
-          a.dy + (b.dy - a.dy) * t,
-        ));
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        final cx = left + (c + 0.5) * cellW;
+        final cy = top + (r + 0.5) * cellH;
+        _samplePoints.add(Offset(cx, cy));
       }
     }
-    return sampled;
   }
 
-  double _calcCoverage(List<Offset> guidePath, List<Offset> drawn) {
-    if (guidePath.isEmpty || drawn.length < 3) return 0.0;
+  double _calcCoverage(List<Offset> drawn) {
+    if (drawn.length < 5 || _samplePoints.isEmpty) return 0.0;
 
-    const tolerance = 30.0;
+    // Tolerance: how close a drawn point must be to a sample point to "cover" it.
+    // Use ~8% of the trace width so it scales with screen size.
+    final tolerance = _traceW * 0.08;
     int covered = 0;
 
-    for (final gp in guidePath) {
+    for (final sp in _samplePoints) {
       for (final dp in drawn) {
-        if ((dp - gp).distance < tolerance) {
+        if ((dp - sp).distance < tolerance) {
           covered++;
           break;
         }
       }
     }
-    return covered / guidePath.length;
+    return covered / _samplePoints.length;
   }
 
   void _onDraw(Offset point) {
     if (_showingSuccess || _allDone) return;
 
-    setState(() => _points.add(point));
+    _points.add(point);
 
-    if (_points.length % 3 != 0) return;
-
-    if (_currentNumber > 20) return;
-    final center = Offset(
-      MediaQuery.of(context).size.width / 2,
-      MediaQuery.of(context).size.height / 2.5,
-    );
-    final size = MediaQuery.of(context).size.shortestSide;
-    final guidePath = _sampleGuidePath(_currentNumber, center, size);
-
-    _coverage = _calcCoverage(guidePath, _points);
-
-    if (_coverage >= 0.65) {
-      _onComplete();
+    // Recalculate coverage every 3 points for responsiveness
+    if (_points.length % 3 == 0) {
+      _coverage = _calcCoverage(_points);
+      if (_coverage >= 0.55) {
+        // Threshold: 55% of the glyph grid covered
+        _onComplete();
+        return;
+      }
     }
+    setState(() {});
   }
 
   void _onComplete() {
+    if (_showingSuccess) return; // guard against double-fire
     _showingSuccess = true;
     _completedNumbers.add(_currentNumber);
     _stars++;
     _sfx.playCorrect();
-    _audio.speakEnglish('Great! Number $_currentNumber!');
+    final word = NumberLetter.wordFor(_currentNumber);
+    _audio.speakEnglish('Great! Number $word!');
 
-    Future.delayed(const Duration(milliseconds: 800), () {
+    // Record progress
+    _progress.recordAttempt('math', '$_currentNumber', true);
+    _progress.addStar('math');
+
+    Future.delayed(const Duration(milliseconds: 900), () {
       if (!mounted) return;
       setState(() {
         _points.clear();
@@ -176,6 +140,8 @@ class _TraceGameState extends State<TraceGame> {
         _showingSuccess = false;
         if (_currentNumber < 20) {
           _currentNumber++;
+          // Regenerate sample points for the new number
+          _generateSamplePoints(_traceW, _traceH, _currentNumber);
           _speakNumber();
         } else {
           _allDone = true;
@@ -218,6 +184,11 @@ class _TraceGameState extends State<TraceGame> {
   }
 
   Widget _buildTopBar() {
+    final label = _allDone
+        ? '🎉'
+        : _showingSuccess
+            ? '✅'
+            : '📐 ${(_coverage * 100).toInt()}%';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -228,17 +199,17 @@ class _TraceGameState extends State<TraceGame> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           const Spacer(),
-          _buildBadge('$_stars', '⭐'),
+          _badge('$_stars', '⭐'),
           const SizedBox(width: 8),
-          _buildBadge('$_currentNumber/20', '🔢'),
+          _badge('$_currentNumber/20', '🔢'),
           const SizedBox(width: 8),
-          _buildBadge('${(_coverage * 100).toInt()}%', '📐'),
+          _badge(label, ''),
         ],
       ),
     );
   }
 
-  Widget _buildBadge(String text, String emoji) {
+  Widget _badge(String text, String emoji) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -248,8 +219,10 @@ class _TraceGameState extends State<TraceGame> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 14)),
-          const SizedBox(width: 4),
+          if (emoji.isNotEmpty) ...[
+            Text(emoji, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 4),
+          ],
           Text(
             text,
             style: const TextStyle(
@@ -266,16 +239,15 @@ class _TraceGameState extends State<TraceGame> {
   Widget _buildNumberDisplay() {
     if (_allDone) {
       return const Padding(
-        padding: EdgeInsets.all(16),
+        padding: EdgeInsets.all(12),
         child: Column(
           children: [
             Text('🎉', style: TextStyle(fontSize: 48)),
-            SizedBox(height: 8),
             Text(
               'All Numbers 1-20\nMastered!',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 28,
+                fontSize: 26,
                 fontWeight: FontWeight.w900,
                 color: AppColors.textDark,
               ),
@@ -286,61 +258,21 @@ class _TraceGameState extends State<TraceGame> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        children: [
-          Text(
-            'Trace $_currentNumber',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Finger trace over the dotted line',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textDark.withValues(alpha: 0.6),
-            ),
-          ),
-          const SizedBox(height: 4),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: _coverage.clamp(0.0, 1.0)),
-            duration: const Duration(milliseconds: 200),
-            builder: (context, value, _) {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: value,
-                  backgroundColor: Colors.white.withValues(alpha: 0.5),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    value > 0.5 ? AppColors.success : AppColors.accent,
-                  ),
-                  minHeight: 8,
-                ),
-              );
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              '${(_coverage * 100).toInt()}% traced',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textDark.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Text(
+        _showingSuccess ? 'Great!' : 'Finger paint over the number',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textDark.withValues(alpha: 0.7),
+        ),
       ),
     );
   }
 
   Widget _buildTracePad() {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Container(
@@ -364,20 +296,26 @@ class _TraceGameState extends State<TraceGame> {
                   child: Text('🎉', style: TextStyle(fontSize: 80)),
                 );
               }
+
+              final w = constraints.maxWidth;
+              final h = constraints.maxHeight;
+              // Regenerate sample points whenever size or number changes
+              if (w != _traceW || h != _traceH ||
+                  _samplePoints.isEmpty) {
+                _traceW = w;
+                _traceH = h;
+                _generateSamplePoints(w, h, _currentNumber);
+              }
+
               return GestureDetector(
-                onPanDown: (d) {
-                  _onDraw(d.localPosition);
-                },
-                onPanUpdate: (d) {
-                  _onDraw(d.localPosition);
-                },
+                onPanDown: (d) => _onDraw(d.localPosition),
+                onPanUpdate: (d) => _onDraw(d.localPosition),
                 child: RepaintBoundary(
                   child: CustomPaint(
-                    size: Size(constraints.maxWidth, constraints.maxHeight),
+                    size: Size(w, h),
                     painter: _TracePainter(
                       points: _points,
                       number: _currentNumber,
-                      coverage: _coverage,
                       showingSuccess: _showingSuccess,
                     ),
                   ),
@@ -428,6 +366,8 @@ class _TraceGameState extends State<TraceGame> {
                   _currentNumber--;
                   _points.clear();
                   _coverage = 0.0;
+                  // Regenerate sample points for the new number
+                  _generateSamplePoints(_traceW, _traceH, _currentNumber);
                 });
                 _speakNumber();
               },
@@ -444,13 +384,11 @@ class _TraceGameState extends State<TraceGame> {
 class _TracePainter extends CustomPainter {
   final List<Offset> points;
   final int number;
-  final double coverage;
   final bool showingSuccess;
 
   _TracePainter({
     required this.points,
     required this.number,
-    required this.coverage,
     required this.showingSuccess,
   });
 
@@ -458,148 +396,77 @@ class _TracePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (number > 20) return;
 
-    final center = Offset(size.width / 2, size.height / 2);
-    final r = min(size.width, size.height) * 0.35;
+    _drawDigitTemplate(canvas, size, number);
+    _drawSampleDots(canvas, size, number);
 
-    final waypoints = _getDigitWaypoints(number, center, r);
-
-    _drawGuideLine(canvas, waypoints, size);
-    _drawStartMarker(canvas, waypoints);
     if (points.length >= 2) {
       _drawTrace(canvas);
     }
+
     if (showingSuccess) {
       _drawSuccessOverlay(canvas, size);
     }
   }
 
-  List<Offset> _getDigitWaypoints(int n, Offset center, double r) {
-    final segs = <Offset>[];
-    void add(double x, double y) => segs.add(Offset(center.dx + x * r, center.dy + y * r));
+  void _drawDigitTemplate(Canvas canvas, Size size, int n) {
+    final text = n > 20 ? '' : '$n';
+    if (text.isEmpty) return;
 
-    switch (n % 10) {
-      case 1: add(0, -1); add(0, 1); break;
-      case 2:
-        add(0.8, -1); add(-0.8, -1); add(-0.8, 0);
-        add(0.8, 0); add(0.8, 1); add(-0.8, 1);
-        break;
-      case 3:
-        add(-0.8, -1); add(0.8, -1); add(0.8, 0);
-        add(-0.5, 0); add(0.8, 0); add(0.8, 1); add(-0.8, 1);
-        break;
-      case 4:
-        add(-0.8, -1); add(-0.8, 0); add(0.8, 0);
-        add(0.8, -1); add(0.8, 1);
-        break;
-      case 5:
-        add(0.8, -1); add(-0.8, -1); add(-0.8, -0.2);
-        add(0.8, -0.2); add(0.8, 0.6); add(-0.8, 0.6);
-        add(-0.8, 1); add(0.8, 1);
-        break;
-      case 6:
-        add(0.8, -1); add(-0.8, -1); add(-0.8, 0);
-        add(0.8, 0); add(0.8, 1); add(-0.8, 1); add(-0.8, 0.5);
-        break;
-      case 7:
-        add(-0.8, -1); add(0.8, -1); add(0.8, -0.4);
-        add(0.4, 0.2); add(0.4, 1);
-        break;
-      case 8:
-        add(0, -1); add(0.8, -0.4); add(0, 0);
-        add(0.8, 0.4); add(0, 1); add(-0.8, 0.4);
-        add(0, 0); add(-0.8, -0.4); add(0, -1);
-        break;
-      case 9:
-        add(0, 1); add(0.8, 1); add(0.8, 0);
-        add(-0.8, 0); add(-0.8, -1); add(0, -1);
-        add(0.5, -1); add(0.8, -0.7);
-        break;
-      case 0:
-        add(-0.7, -1); add(0.7, -1); add(0.7, 1);
-        add(-0.7, 1); add(-0.7, -1);
-        break;
-    }
-    return segs;
+    final fontSize = size.width * 0.50;
+
+    final textStyle = TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w900,
+      color: AppColors.textDark.withValues(alpha: 0.08),
+    );
+
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    tp.layout(maxWidth: size.width);
+
+    final x = (size.width - tp.width) / 2;
+    final y = (size.height - tp.height) / 2;
+
+    canvas.save();
+    canvas.translate(x, y);
+
+    tp.paint(canvas, Offset.zero);
+
+    canvas.restore();
   }
 
-  void _drawGuideLine(Canvas canvas, List<Offset> waypoints, Size size) {
-    if (waypoints.isEmpty) return;
+  void _drawSampleDots(Canvas canvas, Size size, int n) {
+    final rng = Random(n * 37 + 42);
+    final textScale = size.width * 0.55;
+    final textW = textScale * _digitWidthFactor(n);
+    final textH = textScale;
+    final left = (size.width - textW) / 2;
+    final top = (size.height - textH) / 2;
 
-    final paint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    for (int i = 0; i < waypoints.length - 1; i++) {
-      final a = waypoints[i];
-      final b = waypoints[i + 1];
-      _drawDashedLine(canvas, a, b, paint);
-    }
-  }
-
-  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
-    final dx = b.dx - a.dx;
-    final dy = b.dy - a.dy;
-    final dist = sqrt(dx * dx + dy * dy);
-    if (dist < 1) return;
-
-    const dashLen = 8.0;
-    const gapLen = 6.0;
-    final total = dashLen + gapLen;
-    final steps = (dist / total).ceil();
-
-    for (int i = 0; i < steps; i++) {
-      final t0 = (i * total) / dist;
-      final t1 = min((i * total + dashLen) / dist, 1.0);
-      canvas.drawLine(
-        Offset(a.dx + dx * t0, a.dy + dy * t0),
-        Offset(a.dx + dx * t1, a.dy + dy * t1),
-        paint,
-      );
-    }
-  }
-
-  void _drawStartMarker(Canvas canvas, List<Offset> waypoints) {
-    if (waypoints.isEmpty) return;
-
-    final start = waypoints.first;
-    final paint = Paint()
-      ..color = AppColors.success
+    final dotPaint = Paint()
+      ..color = AppColors.accent.withValues(alpha: 0.08)
       ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(start, 10, paint);
+    for (int i = 0; i < 40; i++) {
+      final x = left + rng.nextDouble() * textW;
+      final y = top + rng.nextDouble() * textH;
+      canvas.drawCircle(Offset(x, y), 3, dotPaint);
+    }
+  }
 
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawCircle(start, 10, borderPaint);
-
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: '▶',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(start.dx - textPainter.width / 2,
-          start.dy - textPainter.height / 2),
-    );
+  double _digitWidthFactor(int n) {
+    if (n < 10) return 0.55;
+    return _digitWidthFactor(n % 10) + _digitWidthFactor(n ~/ 10) + 0.25;
   }
 
   void _drawTrace(Canvas canvas) {
     final tracePaint = Paint()
       ..color = AppColors.accent
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
+      ..strokeWidth = 8
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -610,9 +477,9 @@ class _TracePainter extends CustomPainter {
     final glowPaint = Paint()
       ..color = AppColors.accent.withValues(alpha: 0.25)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 14
+      ..strokeWidth = 18
       ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
 
     for (int i = 0; i < points.length - 1; i++) {
       canvas.drawLine(points[i], points[i + 1], glowPaint);
@@ -621,8 +488,7 @@ class _TracePainter extends CustomPainter {
 
   void _drawSuccessOverlay(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.success.withValues(alpha: 0.3);
-
+      ..color = AppColors.success.withValues(alpha: 0.25);
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
       size.shortestSide * 0.3,

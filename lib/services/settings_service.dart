@@ -15,12 +15,14 @@ class SettingsService extends ChangeNotifier {
   bool _darkMode = false;
   String _language = 'hindi';
   String _childName = '';
+  String _avatar = '🐱';
 
   bool get soundEnabled => _soundEnabled;
   bool get hindiVoiceEnabled => _hindiVoiceEnabled;
   bool get darkMode => _darkMode;
   String get language => _language;
   String get childName => _childName;
+  String get avatar => _avatar;
 
   Future<void> init() async {
     _settingsBox = await Hive.openBox(_boxName);
@@ -33,6 +35,7 @@ class SettingsService extends ChangeNotifier {
     _darkMode = _settingsBox.get('darkMode', defaultValue: false);
     _language = _settingsBox.get('language', defaultValue: 'hindi');
     _childName = _settingsBox.get('childName', defaultValue: '');
+    _avatar = _settingsBox.get('avatar', defaultValue: '🐱');
     notifyListeners();
   }
 
@@ -63,6 +66,12 @@ class SettingsService extends ChangeNotifier {
   Future<void> setChildName(String value) async {
     _childName = value;
     await _settingsBox.put('childName', value);
+    notifyListeners();
+  }
+
+  Future<void> setAvatar(String value) async {
+    _avatar = value;
+    await _settingsBox.put('avatar', value);
     notifyListeners();
   }
 

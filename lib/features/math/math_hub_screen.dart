@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
+import '../../models/bubble_letter.dart';
+import '../../models/number_letter.dart';
+import '../../services/streak_service.dart';
+import '../abc/bubble_pop_game.dart';
 import 'counting_game.dart';
 import 'trace_game.dart';
 import 'addition_game.dart';
@@ -87,6 +91,23 @@ class MathHubScreen extends StatelessWidget {
                         onTap: () => _openGame(
                             context, const AdditionGame()),
                       ),
+                      const SizedBox(height: 16),
+                      _GameCard(
+                        emoji: '🔵',
+                        title: 'Number Pop',
+                        subtitle: 'Pop bubbles with numbers 1-20',
+                        color: const Color(0xFF00BCD4),
+                        onTap: () {
+                          StreakService().markToday();
+                          _openGame(
+                            context,
+                            BubblePopGame(
+                              module: ModuleType.math,
+                              customLetters: NumberLetter.numbers1to20,
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -99,6 +120,7 @@ class MathHubScreen extends StatelessWidget {
   }
 
   void _openGame(BuildContext context, Widget game) {
+    StreakService().markToday();
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => game),
     );

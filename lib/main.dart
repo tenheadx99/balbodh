@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'app.dart';
 import 'services/progress_service.dart';
 import 'services/settings_service.dart';
+import 'services/streak_service.dart';
 import 'core/audio/sound_effect_service.dart';
 
 void main() async {
@@ -13,6 +14,7 @@ void main() async {
   await ProgressService().init();
   await SettingsService().init();
   await SoundEffectService().init();
+  await StreakService().init();
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,

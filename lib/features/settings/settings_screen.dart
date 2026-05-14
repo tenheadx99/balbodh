@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../services/settings_service.dart';
 import '../../services/progress_service.dart';
+import '../mascot/mascot_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,16 +14,20 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final SettingsService _settings = SettingsService();
   final ProgressService _progress = ProgressService();
+  late TextEditingController _nameController;
 
   @override
   void initState() {
     super.initState();
     _settings.addListener(_onSettingsChanged);
+    _nameController =
+        TextEditingController(text: _settings.childName);
   }
 
   @override
   void dispose() {
     _settings.removeListener(_onSettingsChanged);
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -51,6 +56,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _buildSection('👤 Profile'),
                     _buildChildNameField(),
+                    const SizedBox(height: 12),
+                    _buildAvatarPicker(),
                     const SizedBox(height: 24),
                     _buildSection('🔊 Audio'),
                     _buildToggle(
@@ -260,9 +267,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: FontWeight.w600,
           color: AppColors.textDark,
         ),
-        controller: TextEditingController(text: _settings.childName),
+        controller: _nameController,
         onSubmitted: (v) => _settings.setChildName(v),
       ),
+    );
+  }
+
+  Widget _buildAvatarPicker() {
+    final current = _settings.avatar;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Choose Character',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textDark.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: availableAvatars.map((a) {
+            final selected = a == current;
+            return GestureDetector(
+              onTap: () => _settings.setAvatar(a),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.warning.withValues(alpha: 0.3) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: selected ? AppColors.warning : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Text(a, style: const TextStyle(fontSize: 26)),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 

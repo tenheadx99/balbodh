@@ -13,8 +13,9 @@ enum GamePhase { intro, playing, correct, wrong, complete }
 
 class BubblePopGame extends StatefulWidget {
   final ModuleType module;
+  final List<BubbleLetter>? customLetters;
 
-  const BubblePopGame({super.key, required this.module});
+  const BubblePopGame({super.key, required this.module, this.customLetters});
 
   @override
   State<BubblePopGame> createState() => _BubblePopGameState();
@@ -55,8 +56,16 @@ class _BubblePopGameState extends State<BubblePopGame>
   double _screenW = 400;
   double _screenH = 800;
 
-  String get _moduleKey =>
-      widget.module == ModuleType.hindi ? 'hindi' : 'abc';
+  String get _moduleKey {
+    switch (widget.module) {
+      case ModuleType.hindi:
+        return 'hindi';
+      case ModuleType.math:
+        return 'math';
+      case ModuleType.abc:
+        return 'abc';
+    }
+  }
 
   List<BubbleLetter> _allLetters = [];
   List<BubbleLetter> _sessionLetters = [];
@@ -82,9 +91,9 @@ class _BubblePopGameState extends State<BubblePopGame>
   }
 
   void _initGame() {
-    _allLetters = widget.module == ModuleType.hindi
+    _allLetters = widget.customLetters ?? (widget.module == ModuleType.hindi
         ? BubbleLetter.hindiLetters
-        : BubbleLetter.abcLetters;
+        : BubbleLetter.abcLetters);
     _currentLevel = 0;
     _loadNextLevel();
   }
@@ -137,6 +146,10 @@ class _BubblePopGameState extends State<BubblePopGame>
         await Future.delayed(const Duration(milliseconds: 500));
         await _audio.speakHindi('${target.letter} for ${target.objectName}');
       }
+    } else if (widget.module == ModuleType.math) {
+      // For numbers: say "Find number Three" using the word name
+      final word = target.objectName.isNotEmpty ? target.objectName : target.letter;
+      await _audio.speakEnglish('Find number $word');
     } else {
       await _audio.speakEnglish('Find the letter ${target.letter}');
       await _audio.playLetterSound(target.letter, 'abc');
@@ -229,7 +242,11 @@ class _BubblePopGameState extends State<BubblePopGame>
       _inactivitySeconds++;
       if (_inactivitySeconds >= 8 && !_hintActive) {
         _hintActive = true;
-        _audio.speakEnglish('Look for ${_currentTarget!.letter}');
+        final t = _currentTarget!;
+        final hint = widget.module == ModuleType.math
+            ? 'Look for number ${t.objectName.isNotEmpty ? t.objectName : t.letter}'
+            : 'Look for ${t.letter}';
+        _audio.speakEnglish(hint);
         setState(() {});
         Future.delayed(const Duration(seconds: 4), () {
           if (mounted) {
@@ -331,7 +348,9 @@ class _BubblePopGameState extends State<BubblePopGame>
     _cancelAllTimers();
     _phase = GamePhase.complete;
     _showReward = true;
-    _rewardMessage = '🎉 All letters mastered!';
+    _rewardMessage = widget.module == ModuleType.math
+        ? '🎉 All numbers mastered!'
+        : '🎉 All letters mastered!';
     setState(() {});
   }
 
@@ -339,7 +358,11 @@ class _BubblePopGameState extends State<BubblePopGame>
     if (_phase != GamePhase.playing) return;
     _hintActive = true;
     _sfx.playTap();
-    _audio.speakEnglish('Look for ${_currentTarget!.letter}');
+    final t = _currentTarget!;
+    final hint = widget.module == ModuleType.math
+        ? 'Look for number ${t.objectName.isNotEmpty ? t.objectName : t.letter}'
+        : 'Look for the letter ${t.letter}';
+    _audio.speakEnglish(hint);
     setState(() {});
 
     Future.delayed(const Duration(seconds: 3), () {
