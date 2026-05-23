@@ -765,6 +765,7 @@ class _BubblePopGameState extends State<BubblePopGame> with TickerProviderStateM
   }
 
   Widget _buildEducationalIntroOverlay() {
+    if (_currentTarget == null) return const SizedBox.shrink();
     final target = _currentTarget!;
     
     // Custom subtexts for bilingual Hindi, English, and Math
