@@ -22,8 +22,7 @@ class BubblePopGame extends StatefulWidget {
   State<BubblePopGame> createState() => _BubblePopGameState();
 }
 
-class _BubblePopGameState extends State<BubblePopGame>
-    with TickerProviderStateMixin {
+class _BubblePopGameState extends State<BubblePopGame> with TickerProviderStateMixin {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
   final ProgressService _progress = ProgressService();
@@ -31,6 +30,7 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   GamePhase _phase = GamePhase.intro;
   final List<_BubbleSprite> _bubbles = [];
+  final List<_BubblePopParticle> _particles = [];
   BubbleLetter? _currentTarget;
   String _introLetter = '';
 
@@ -58,6 +58,10 @@ class _BubblePopGameState extends State<BubblePopGame>
   double _screenW = 400;
   double _screenH = 800;
 
+  // Mascot guide reactions
+  String _mascotEmoji = '🐱';
+  String _mascotTalk = 'Find my matching bubble!';
+
   String get _moduleKey {
     switch (widget.module) {
       case ModuleType.hindi:
@@ -79,7 +83,7 @@ class _BubblePopGameState extends State<BubblePopGame>
 
     _bgController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
     _bgAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _bgController, curve: Curves.easeInOut),
@@ -134,7 +138,7 @@ class _BubblePopGameState extends State<BubblePopGame>
     setState(() {});
     _speakIntro();
 
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(milliseconds: 3200), () {
       if (mounted) _startPlaying();
     });
   }
@@ -146,10 +150,9 @@ class _BubblePopGameState extends State<BubblePopGame>
       await _audio.playLetterSound(target.letter, 'hindi');
       if (target.objectName.isNotEmpty) {
         await Future.delayed(const Duration(milliseconds: 500));
-        await _audio.speakHindi('${target.letter} for ${target.objectName}');
+        await _audio.speakHindi('${target.letter} से ${target.objectName}');
       }
     } else if (widget.module == ModuleType.math) {
-      // For numbers: say "Find number Three" using the word name
       final word = target.objectName.isNotEmpty ? target.objectName : target.letter;
       await _audio.speakEnglish('Find number $word');
     } else {
@@ -157,7 +160,7 @@ class _BubblePopGameState extends State<BubblePopGame>
       await _audio.playLetterSound(target.letter, 'abc');
       if (target.objectName.isNotEmpty) {
         await Future.delayed(const Duration(milliseconds: 500));
-        await _audio.speakEnglish('${target.letter} for ${target.objectName}');
+        await _audio.speakEnglish('${target.letter} is for ${target.objectName}');
       }
     }
   }
@@ -182,25 +185,23 @@ class _BubblePopGameState extends State<BubblePopGame>
     for (int i = 0; i < total; i++) {
       _addBubble(
         isTarget: i == 0,
-        yOffset: _random.nextDouble() * _screenH * 0.3,
+        yOffset: _random.nextDouble() * _screenH * 0.25,
       );
     }
   }
 
   void _addBubble({bool isTarget = false, double yOffset = 0}) {
     final target = _currentTarget!;
-    final letter = isTarget
-        ? target
-        : _randomDistractor(target);
+    final letter = isTarget ? target : _randomDistractor(target);
 
     _bubbles.add(_BubbleSprite(
       id: _nextBubbleId++,
       letter: letter,
-      x: 50 + _random.nextDouble() * (_screenW - 150),
-      y: _screenH + 50 + yOffset,
-      speed: 1.0 + _random.nextDouble() * 0.8 + _currentLevel * 0.05,
+      x: 60 + _random.nextDouble() * (_screenW - 140),
+      y: _screenH + 60 + yOffset,
+      speed: 1.1 + _random.nextDouble() * 0.9 + _currentLevel * 0.06,
       wobblePhase: _random.nextDouble() * pi * 2,
-      wobbleAmp: 0.3 + _random.nextDouble() * 0.4,
+      wobbleAmp: 0.3 + _random.nextDouble() * 0.5,
       color: AppColors.bubbleColors[_random.nextInt(AppColors.bubbleColors.length)],
       isTarget: isTarget,
     ));
@@ -213,7 +214,7 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   void _startSpawnTimer() {
     _spawnTimer?.cancel();
-    _spawnTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _spawnTimer = Timer.periodic(const Duration(milliseconds: 2600), (_) {
       if (_phase != GamePhase.playing || !mounted) return;
       _addBubble(isTarget: false);
       if (_random.nextBool()) _addBubble(isTarget: false);
@@ -221,17 +222,42 @@ class _BubblePopGameState extends State<BubblePopGame>
     });
   }
 
+  void _triggerBubbleParticles(double originX, double originY, Color color) {
+    for (int i = 0; i < 14; i++) {
+      final angle = _random.nextDouble() * 2 * pi;
+      final speed = 1.5 + _random.nextDouble() * 4.0;
+      _particles.add(_BubblePopParticle(
+        x: originX,
+        y: originY,
+        vx: cos(angle) * speed,
+        vy: sin(angle) * speed - 1.0,
+        size: 5.0 + _random.nextDouble() * 10.0,
+        color: color.withValues(alpha: 0.8),
+      ));
+    }
+  }
+
   void _startFloatTimer() {
     _floatTimer?.cancel();
     _floatTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (_phase != GamePhase.playing || !mounted) return;
       setState(() {
+        // Float bubbles
         for (final b in _bubbles) {
           final wobble = sin(b.y * 0.02 + b.wobblePhase) * b.wobbleAmp;
           b.y -= b.speed;
           b.x += wobble;
         }
         _bubbles.removeWhere((b) => b.y < -120);
+
+        // Physics for popped bubble droplets
+        for (final p in _particles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.12; // weak water gravity
+          p.opacity -= 0.03; // fast fade pop
+        }
+        _particles.removeWhere((p) => p.opacity <= 0);
       });
     });
   }
@@ -242,12 +268,12 @@ class _BubblePopGameState extends State<BubblePopGame>
     _inactivityTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_phase != GamePhase.playing || !mounted) return;
       _inactivitySeconds++;
-      if (_inactivitySeconds >= 8 && !_hintActive) {
+      if (_inactivitySeconds >= 7 && !_hintActive) {
         _hintActive = true;
         final t = _currentTarget!;
         final hint = widget.module == ModuleType.math
-            ? 'Look for number ${t.objectName.isNotEmpty ? t.objectName : t.letter}'
-            : 'Look for ${t.letter}';
+            ? 'Look for number ${t.displayName}'
+            : 'Look for ${t.displayName}';
         _audio.speakEnglish(hint);
         setState(() {});
         Future.delayed(const Duration(seconds: 4), () {
@@ -272,6 +298,10 @@ class _BubblePopGameState extends State<BubblePopGame>
   void _onCorrectPop() {
     if (_phase != GamePhase.playing) return;
 
+    // Retrieve target bubble position to burst water bubbles
+    final targetB = _bubbles.firstWhere((b) => b.isTarget, orElse: () => _bubbles.first);
+    _triggerBubbleParticles(targetB.x, targetB.y, targetB.color);
+
     _phase = GamePhase.correct;
     _correctCount++;
     _streak++;
@@ -283,33 +313,37 @@ class _BubblePopGameState extends State<BubblePopGame>
 
     _sfx.playCorrect();
 
-    if (_streak >= 3) {
-      _rewardMessage = '🔥 Amazing!\n$_streak in a row!';
-      _stars++;
-      _sfx.playStreak();
-    } else {
-      _rewardMessage = '⭐ Great!';
-      _sfx.playStar();
-    }
+    setState(() {
+      _mascotEmoji = '🥳';
+      if (_streak >= 3) {
+        _rewardMessage = '🔥 Double Sparkle!\n$_streak in a row!';
+        _stars++;
+        _sfx.playStreak();
+      } else {
+        _rewardMessage = '⭐ Bubble Popped!';
+        _sfx.playStar();
+      }
+    });
 
     _audio.playEncouragement(hindi: widget.module == ModuleType.hindi);
 
     _showReward = true;
     _cancelAllTimers();
-    setState(() {});
 
-    Future.delayed(const Duration(seconds: 1), () {
+    Future.delayed(const Duration(milliseconds: 1500), () {
       if (!mounted) return;
-      _showReward = false;
-      _sessionLetterIndex++;
+      setState(() {
+        _showReward = false;
+        _mascotEmoji = '🐱';
+        _sessionLetterIndex++;
 
-      if (_correctCount >= _levelSize) {
-        _phase = GamePhase.complete;
-        _showLevelComplete();
-      } else {
-        _startIntro();
-      }
-      setState(() {});
+        if (_correctCount >= _levelSize) {
+          _phase = GamePhase.complete;
+          _showLevelComplete();
+        } else {
+          _startIntro();
+        }
+      });
     });
   }
 
@@ -322,11 +356,22 @@ class _BubblePopGameState extends State<BubblePopGame>
 
     _sfx.playWrong();
     _audio.playTryAgain(hindi: widget.module == ModuleType.hindi);
-    setState(() {});
+    setState(() {
+      _mascotEmoji = '😮';
+      _mascotTalk = 'Oops! That is a different bubble!';
+    });
+
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted && _mascotEmoji == '😮') {
+        setState(() {
+          _mascotEmoji = '🐱';
+        });
+      }
+    });
 
     if (_wrongAttempts >= 3 && !_hintActive) {
       _hintActive = true;
-      _audio.speakEnglish('Look for the letter ${_currentTarget!.letter}');
+      _audio.speakEnglish('Tap the bubble with ${_currentTarget!.letter}');
       setState(() {});
     }
   }
@@ -334,7 +379,7 @@ class _BubblePopGameState extends State<BubblePopGame>
   void _showLevelComplete() {
     _sfx.playFanfare();
     _showReward = true;
-    _rewardMessage = '🎉 Level $_currentLevel Complete!';
+    _rewardMessage = '🎉 Level ${_currentLevel + 1} Complete!';
     setState(() {});
 
     Future.delayed(const Duration(seconds: 2), () {
@@ -349,7 +394,7 @@ class _BubblePopGameState extends State<BubblePopGame>
   void _onAdRewarded() {
     _stars += 3;
     _sfx.playStreak();
-    _audio.speakEnglish('Bonus stars!');
+    _audio.speakEnglish('Bonus stars! You are amazing!');
     _proceedAfterLevel();
   }
 
@@ -365,8 +410,8 @@ class _BubblePopGameState extends State<BubblePopGame>
     _phase = GamePhase.complete;
     _showReward = true;
     _rewardMessage = widget.module == ModuleType.math
-        ? '🎉 All numbers mastered!'
-        : '🎉 All letters mastered!';
+        ? '🎉 Master of Numbers!'
+        : '🎉 Alphabet Expert!';
     setState(() {});
   }
 
@@ -376,8 +421,8 @@ class _BubblePopGameState extends State<BubblePopGame>
     _sfx.playTap();
     final t = _currentTarget!;
     final hint = widget.module == ModuleType.math
-        ? 'Look for number ${t.objectName.isNotEmpty ? t.objectName : t.letter}'
-        : 'Look for the letter ${t.letter}';
+        ? 'Look for number ${t.displayName}'
+        : 'Look for ${t.displayName}';
     _audio.speakEnglish(hint);
     setState(() {});
 
@@ -424,10 +469,10 @@ class _BubblePopGameState extends State<BubblePopGame>
             children: [
               _buildGameArea(),
               _buildTopBar(),
-              if (_phase == GamePhase.intro) _buildIntroOverlay(),
+              if (_phase == GamePhase.playing) _buildMascotBanner(),
+              if (_phase == GamePhase.intro) _buildEducationalIntroOverlay(),
               if (_showReward) _buildRewardOverlay(),
-              if (_phase == GamePhase.complete && !_showReward)
-                _buildCompletionScreen(),
+              if (_phase == GamePhase.complete && !_showReward) _buildCompletionScreen(),
               if (_showAdOffer) _buildAdOffer(),
             ],
           ),
@@ -438,18 +483,18 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   Widget _buildAdOffer() {
     return Container(
-      color: Colors.black.withValues(alpha: 0.4),
+      color: Colors.black.withValues(alpha: 0.55),
       child: Center(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 32),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 20,
+                blurRadius: 24,
                 offset: const Offset(0, 10),
               ),
             ],
@@ -457,9 +502,9 @@ class _BubblePopGameState extends State<BubblePopGame>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('⭐', style: TextStyle(fontSize: 56)),
+              const Text('🎁', style: TextStyle(fontSize: 64)),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Double your stars?',
                 style: TextStyle(
                   fontSize: 24,
@@ -473,10 +518,11 @@ class _BubblePopGameState extends State<BubblePopGame>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
+                  fontWeight: FontWeight.w600,
                   color: AppColors.textDark.withValues(alpha: 0.6),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -491,8 +537,8 @@ class _BubblePopGameState extends State<BubblePopGame>
                         backgroundColor: AppColors.warning,
                         foregroundColor: AppColors.textDark,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        textStyle: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
@@ -500,11 +546,19 @@ class _BubblePopGameState extends State<BubblePopGame>
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _proceedAfterLevel,
-                      child: const Text('Skip',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textDark)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.grey),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text(
+                        'Skip',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -519,69 +573,104 @@ class _BubblePopGameState extends State<BubblePopGame>
   Widget _buildGameArea() {
     return Stack(
       children: [
+        // 1. Floating glassmorphic bubbles
         ..._bubbles.map((b) => BubbleWidget(
               key: ValueKey(b.id),
               letter: b.letter,
               xPosition: b.x,
               yPosition: b.y,
-              size: 75.0,
+              size: 78.0,
               color: b.color,
               isTarget: b.isTarget,
               isHinted: b.isTarget && _hintActive,
               onPopped: _onCorrectPop,
               onWrong: _onWrongPop,
             )),
-        if (_phase == GamePhase.playing)
-          Positioned(
-            bottom: 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Find: ${_currentTarget?.displayName ?? ""}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark,
-                  ),
-                ),
-              ),
-            ),
+
+        // 2. Custom particle paint overlay
+        IgnorePointer(
+          child: CustomPaint(
+            size: Size(_screenW, _screenH),
+            painter: _BubbleDropletPainter(_particles),
           ),
+        ),
+
+        // 3. Hint bulb button
         if (_phase == GamePhase.playing)
           Positioned(
             right: 16,
-            bottom: 80,
+            bottom: 24,
             child: GestureDetector(
               onTap: _onHint,
               child: Container(
-                width: 56,
-                height: 56,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.9),
+                  color: AppColors.warning.withValues(alpha: 0.95),
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.shadow,
-                      blurRadius: 8,
+                      blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: const Center(
-                  child: Text('💡', style: TextStyle(fontSize: 28)),
+                  child: Text('💡', style: TextStyle(fontSize: 30)),
                 ),
               ),
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildMascotBanner() {
+    return Positioned(
+      top: 66,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: Row(
+          children: [
+            Text(_mascotEmoji, style: const TextStyle(fontSize: 34)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _mascotTalk,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 1),
+                  Row(
+                    children: [
+                      const Text(
+                        'Pop: ',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                      ),
+                      Text(
+                        _currentTarget?.displayName ?? "",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -595,8 +684,7 @@ class _BubblePopGameState extends State<BubblePopGame>
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.arrow_back,
-                  size: 32, color: AppColors.textDark),
+              icon: const Icon(Icons.arrow_back, size: 32, color: AppColors.textDark),
               onPressed: () => Navigator.of(context).pop(),
             ),
             const Spacer(),
@@ -604,12 +692,12 @@ class _BubblePopGameState extends State<BubblePopGame>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('⭐', style: TextStyle(fontSize: 20)),
+                  const Text('⭐', style: TextStyle(fontSize: 18)),
                   const SizedBox(width: 4),
                   Text('$_stars',
                       style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
                           color: AppColors.textDark)),
                 ],
               ),
@@ -617,21 +705,23 @@ class _BubblePopGameState extends State<BubblePopGame>
             if (_streak >= 2) ...[
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.orange.withValues(alpha: 0.9),
+                  color: AppColors.orange,
                   borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.orange.withValues(alpha: 0.3), blurRadius: 4),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('🔥', style: TextStyle(fontSize: 16)),
+                    const Text('🔥', style: TextStyle(fontSize: 14)),
                     const SizedBox(width: 4),
                     Text('$_streak',
                         style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
                             color: Colors.white)),
                   ],
                 ),
@@ -639,16 +729,15 @@ class _BubblePopGameState extends State<BubblePopGame>
             ],
             const SizedBox(width: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.secondary.withValues(alpha: 0.9),
+                color: AppColors.secondary,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text('Level ${_currentLevel + 1}',
                   style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
                       color: Colors.white)),
             ),
           ],
@@ -659,7 +748,7 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   Widget _badgeContainer(Widget child) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
@@ -675,61 +764,156 @@ class _BubblePopGameState extends State<BubblePopGame>
     );
   }
 
-  Widget _buildIntroOverlay() {
+  Widget _buildEducationalIntroOverlay() {
+    final target = _currentTarget!;
+    
+    // Custom subtexts for bilingual Hindi, English, and Math
+    String subtitle = 'Pop the matching bubbles!';
+    Widget visualRepresentation = const SizedBox.shrink();
+
+    if (widget.module == ModuleType.hindi) {
+      subtitle = '${target.letter} से ${target.objectName}';
+      visualRepresentation = Text(
+        target.objectName.isNotEmpty ? _letterToEmoji(target.letter) : '🕉️',
+        style: const TextStyle(fontSize: 68),
+      );
+    } else if (widget.module == ModuleType.abc) {
+      subtitle = '${target.letter} is for ${target.objectName}';
+      visualRepresentation = Text(
+        _letterToEmoji(target.letter),
+        style: const TextStyle(fontSize: 68),
+      );
+    } else if (widget.module == ModuleType.math) {
+      subtitle = 'Trace & Count: ${target.objectName}';
+      // Renders a grid of stars corresponding to the number count! Extremely educational!
+      int count = int.tryParse(target.letter) ?? 1;
+      visualRepresentation = Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        alignment: WrapAlignment.center,
+        children: List.generate(count.clamp(1, 10), (index) {
+          return const Text('⭐', style: TextStyle(fontSize: 32));
+        }) + (count > 10 ? [const Text('...', style: TextStyle(fontSize: 24, color: Colors.white))] : []),
+      );
+    }
+
     return Container(
-      color: Colors.black.withValues(alpha: 0.3),
+      color: Colors.black.withValues(alpha: 0.45),
       child: Center(
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 500),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.elasticOut,
           builder: (context, value, child) {
-            return Opacity(
-              opacity: value,
-              child: Transform.scale(scale: value, child: child),
-            );
+            return Transform.scale(scale: value, child: child);
           },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primary,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.5),
-                      blurRadius: 30,
-                      spreadRadius: 5,
-                    ),
-                  ],
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFE8F5E9), Colors.white],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: Colors.white, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
-                child: Center(
-                  child: Text(
-                    _introLetter,
-                    style: const TextStyle(
-                      fontSize: 64,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.secondary],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      _introLetter,
+                      style: const TextStyle(
+                        fontSize: 56,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Pop the right bubble!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                const SizedBox(height: 18),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textDark,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.green.shade100, width: 2),
+                  ),
+                  child: visualRepresentation,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Listen & pop the correct bubble!',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  String _letterToEmoji(String letter) {
+    final map = {
+      // English
+      'A': '🍎', 'B': '⚽', 'C': '🐱', 'D': '🐶', 'E': '🐘',
+      'F': '🐟', 'G': '🐐', 'H': '🎩', 'I': '🍦', 'J': '🏺',
+      'K': '🪁', 'L': '🦁', 'M': '🐵', 'N': '🪺', 'O': '🍊',
+      'P': '🐧', 'Q': '👑', 'R': '🐰', 'S': '☀️', 'T': '🐯',
+      'U': '☂️', 'V': '🎻', 'W': '⌚', 'X': '🎵', 'Y': '🐃',
+      'Z': '🦓',
+      // Hindi
+      'अ': '🍊', 'आ': '🥭', 'इ': '🍇', 'ई': '🎋', 'उ': '🦉',
+      'ऊ': '🧶', 'ऋ': '🧘', 'ए': '🦶', 'ऐ': '👓', 'ओ': '💧',
+      'औ': '💊', 'अं': '🍇', 'क': '🕊️', 'ख': '🐰', 'ग': '🏺',
+      'घ': '🏡', 'च': '🥄', 'छ': '☂️', 'ज': '🚢', 'झ': '🚩',
+      'ट': '🍅', 'ठ': '🪵', 'ड': '🥁', 'ढ': '🛡️', 'त': '🍉',
+      'थ': '⚖️', 'द': '🦷', 'ध': '🏹', 'न': 'tap', 'प': '🪁',
+      'फ': '🍎', 'ब': '🐐', 'भ': '🐻', 'म': '🐟', 'य': '🧘',
+      'र': '🚗', 'ल': '🪵', 'व': '🌳', 'श': '🍯', 'ष': '🎨',
+      'स': '🍎', 'ह': '🐘',
+    };
+    return map[letter] ?? '🎈';
   }
 
   Widget _buildRewardOverlay() {
@@ -741,50 +925,53 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   Widget _buildCompletionScreen() {
     return Container(
-      color: Colors.black.withValues(alpha: 0.4),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🎉', style: TextStyle(fontSize: 80)),
-            const SizedBox(height: 24),
-            Text(
-              'All Letters\nMastered!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                shadows: [
-                  Shadow(
-                    blurRadius: 10,
-                    color: Colors.black.withValues(alpha: 0.5),
-                  ),
-                ],
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20)],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('🏆', style: TextStyle(fontSize: 72)),
+              const SizedBox(height: 16),
+              Text(
+                widget.module == ModuleType.math
+                    ? 'Math Master!'
+                    : 'Language Expert!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textDark,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'You earned $_stars stars! ⭐',
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white70),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.home),
-              label: const Text('Go Home'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.secondary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                textStyle: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w700),
+              const SizedBox(height: 8),
+              Text(
+                'You mastered all target values and earned $_stars stars!',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.home),
+                label: const Text('Back to Home'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -813,4 +1000,48 @@ class _BubbleSprite {
     required this.color,
     required this.isTarget,
   });
+}
+
+class _BubblePopParticle {
+  double x;
+  double y;
+  double vx;
+  double vy;
+  double size;
+  Color color;
+  double opacity = 1.0;
+
+  _BubblePopParticle({
+    required this.x,
+    required this.y,
+    required this.vx,
+    required this.vy,
+    required this.size,
+    required this.color,
+  });
+}
+
+class _BubbleDropletPainter extends CustomPainter {
+  final List<_BubblePopParticle> particles;
+  _BubbleDropletPainter(this.particles);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    
+    for (final p in particles) {
+      paint.color = p.color.withValues(alpha: p.opacity.clamp(0.0, 1.0));
+      
+      // Draw shiny soap bubble droplet (circle with a small inner highlight point)
+      canvas.drawCircle(Offset(p.x, p.y), p.size, paint);
+      
+      final highlightPaint = Paint()
+        ..color = Colors.white.withValues(alpha: p.opacity * 0.7)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(p.x - p.size * 0.3, p.y - p.size * 0.3), p.size * 0.25, highlightPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

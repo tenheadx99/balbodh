@@ -485,7 +485,7 @@ class _BalloonPopGameState extends State<BalloonPopGame> with TickerProviderStat
                 'A to Z Champ!',
                 style: TextStyle(
                   fontSize: 32,
-                  fontWeight: FontWeight.w950,
+                  fontWeight: FontWeight.w900,
                   color: AppColors.textDark,
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
@@ -13,12 +14,14 @@ class TraceGame extends StatefulWidget {
   State<TraceGame> createState() => _TraceGameState();
 }
 
-class _TraceGameState extends State<TraceGame> {
+class _TraceGameState extends State<TraceGame> with SingleTickerProviderStateMixin {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
   final ProgressService _progress = ProgressService();
+  final Random _random = Random();
 
   final List<Offset> _points = [];
+  final List<_TraceSparkle> _sparkles = [];
   final Set<int> _completedNumbers = {};
   int _currentNumber = 1;
   int _stars = 0;
@@ -30,10 +33,32 @@ class _TraceGameState extends State<TraceGame> {
   double _traceH = 300;
   final List<Offset> _samplePoints = [];
 
+  // Ticker for real-time trace sparkle physics
+  late AnimationController _tickerController;
+
   @override
   void initState() {
     super.initState();
     _speakNumber();
+
+    _tickerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..addListener(_updateSparkles);
+    _tickerController.repeat();
+  }
+
+  void _updateSparkles() {
+    if (!mounted) return;
+    setState(() {
+      for (final s in _sparkles) {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.15; // soft gravity
+        s.life -= 0.05;
+      }
+      _sparkles.removeWhere((s) => s.life <= 0);
+    });
   }
 
   void _speakNumber() {
@@ -41,15 +66,10 @@ class _TraceGameState extends State<TraceGame> {
     _audio.speakEnglish('Trace number $word');
   }
 
-  /// Generates sample points that lie on the actual rendered strokes of [number]
-  /// by rasterising the digit text and sampling pixels from the text painter.
-  /// We use a dense grid approach: lay a grid over the digit bounding box and
-  /// pick points that are likely on a stroke (centre of the glyph area).
   void _generateSamplePoints(double w, double h, int number) {
     _samplePoints.clear();
 
-    // Lay out the digit with the same style used in _TracePainter
-    final fontSize = w * 0.50;
+    final fontSize = w * 0.55;
     final tp = TextPainter(
       text: TextSpan(
         text: '$number',
@@ -68,9 +88,8 @@ class _TraceGameState extends State<TraceGame> {
     final left = (w - glyphW) / 2;
     final top = (h - glyphH) / 2;
 
-    // Divide the glyph rect into a grid and record all interior cells
-    const cols = 10;
-    const rows = 10;
+    const cols = 12;
+    const rows = 12;
     final cellW = glyphW / cols;
     final cellH = glyphH / rows;
 
@@ -86,9 +105,7 @@ class _TraceGameState extends State<TraceGame> {
   double _calcCoverage(List<Offset> drawn) {
     if (drawn.length < 5 || _samplePoints.isEmpty) return 0.0;
 
-    // Tolerance: how close a drawn point must be to a sample point to "cover" it.
-    // Use ~8% of the trace width so it scales with screen size.
-    final tolerance = _traceW * 0.08;
+    final tolerance = _traceW * 0.09;
     int covered = 0;
 
     for (final sp in _samplePoints) {
@@ -107,11 +124,22 @@ class _TraceGameState extends State<TraceGame> {
 
     _points.add(point);
 
-    // Recalculate coverage every 3 points for responsiveness
+    // Spawn cute glittering stars under user's finger!
+    for (int i = 0; i < 2; i++) {
+      final angle = _random.nextDouble() * 2 * pi;
+      final speed = 0.5 + _random.nextDouble() * 1.8;
+      _sparkles.add(_TraceSparkle(
+        x: point.dx,
+        y: point.dy,
+        vx: cos(angle) * speed,
+        vy: sin(angle) * speed - 0.5,
+        color: Colors.amberAccent.shade200,
+      ));
+    }
+
     if (_points.length % 3 == 0) {
       _coverage = _calcCoverage(_points);
-      if (_coverage >= 0.55) {
-        // Threshold: 55% of the glyph grid covered
+      if (_coverage >= 0.52) {
         _onComplete();
         return;
       }
@@ -120,7 +148,7 @@ class _TraceGameState extends State<TraceGame> {
   }
 
   void _onComplete() {
-    if (_showingSuccess) return; // guard against double-fire
+    if (_showingSuccess) return; 
     _showingSuccess = true;
     _completedNumbers.add(_currentNumber);
     _stars++;
@@ -128,11 +156,10 @@ class _TraceGameState extends State<TraceGame> {
     final word = NumberLetter.wordFor(_currentNumber);
     _audio.speakEnglish('Great! Number $word!');
 
-    // Record progress
     _progress.recordAttempt('math', '$_currentNumber', true);
     _progress.addStar('math');
 
-    Future.delayed(const Duration(milliseconds: 900), () {
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (!mounted) return;
       setState(() {
         _points.clear();
@@ -140,7 +167,6 @@ class _TraceGameState extends State<TraceGame> {
         _showingSuccess = false;
         if (_currentNumber < 20) {
           _currentNumber++;
-          // Regenerate sample points for the new number
           _generateSamplePoints(_traceW, _traceH, _currentNumber);
           _speakNumber();
         } else {
@@ -154,6 +180,7 @@ class _TraceGameState extends State<TraceGame> {
 
   @override
   void dispose() {
+    _tickerController.dispose();
     _audio.dispose();
     super.dispose();
   }
@@ -166,7 +193,7 @@ class _TraceGameState extends State<TraceGame> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFE1BEE7), Color(0xFFF3E5F5)],
+            colors: [Color(0xFFEDE7F6), Color(0xFFD1C4E9)], // Beautiful play study lavender colors
           ),
         ),
         child: SafeArea(
@@ -194,8 +221,7 @@ class _TraceGameState extends State<TraceGame> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back,
-                size: 32, color: AppColors.textDark),
+            icon: const Icon(Icons.arrow_back, size: 32, color: AppColors.textDark),
             onPressed: () => Navigator.of(context).pop(),
           ),
           const Spacer(),
@@ -211,10 +237,17 @@ class _TraceGameState extends State<TraceGame> {
 
   Widget _badge(String text, String emoji) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -227,7 +260,7 @@ class _TraceGameState extends State<TraceGame> {
             text,
             style: const TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               color: AppColors.textDark,
             ),
           ),
@@ -260,11 +293,11 @@ class _TraceGameState extends State<TraceGame> {
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 2),
       child: Text(
-        _showingSuccess ? 'Great!' : 'Finger paint over the number',
+        _showingSuccess ? 'Great Job!' : '🎨 Trace inside the path with your finger!',
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textDark.withValues(alpha: 0.7),
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          color: AppColors.textDark.withValues(alpha: 0.75),
         ),
       ),
     );
@@ -274,16 +307,15 @@ class _TraceGameState extends State<TraceGame> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         child: Container(
           decoration: BoxDecoration(
-            color: _showingSuccess
-                ? AppColors.success.withValues(alpha: 0.15)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: const Color(0xFF1B5E20), // School green chalkboard texture
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFF8D6E63), width: 8), // Elegant wood frame border
             boxShadow: [
               BoxShadow(
-                color: AppColors.shadow,
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -299,9 +331,8 @@ class _TraceGameState extends State<TraceGame> {
 
               final w = constraints.maxWidth;
               final h = constraints.maxHeight;
-              // Regenerate sample points whenever size or number changes
-              if (w != _traceW || h != _traceH ||
-                  _samplePoints.isEmpty) {
+              
+              if (w != _traceW || h != _traceH || _samplePoints.isEmpty) {
                 _traceW = w;
                 _traceH = h;
                 _generateSamplePoints(w, h, _currentNumber);
@@ -315,6 +346,7 @@ class _TraceGameState extends State<TraceGame> {
                     size: Size(w, h),
                     painter: _TracePainter(
                       points: _points,
+                      sparkles: _sparkles,
                       number: _currentNumber,
                       showingSuccess: _showingSuccess,
                     ),
@@ -339,6 +371,7 @@ class _TraceGameState extends State<TraceGame> {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.secondary,
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           ),
         ),
       );
@@ -355,8 +388,7 @@ class _TraceGameState extends State<TraceGame> {
               _coverage = 0.0;
             }),
             icon: const Icon(Icons.clear, color: AppColors.textDark),
-            label: const Text('Clear',
-                style: TextStyle(color: AppColors.textDark)),
+            label: const Text('Clear board', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 24),
           if (_currentNumber > 1)
@@ -366,14 +398,12 @@ class _TraceGameState extends State<TraceGame> {
                   _currentNumber--;
                   _points.clear();
                   _coverage = 0.0;
-                  // Regenerate sample points for the new number
                   _generateSamplePoints(_traceW, _traceH, _currentNumber);
                 });
                 _speakNumber();
               },
               icon: const Icon(Icons.undo, color: AppColors.textDark),
-              label: const Text('Back',
-                  style: TextStyle(color: AppColors.textDark)),
+              label: const Text('Previous', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -381,13 +411,32 @@ class _TraceGameState extends State<TraceGame> {
   }
 }
 
+class _TraceSparkle {
+  double x;
+  double y;
+  double vx;
+  double vy;
+  double life = 1.0;
+  Color color;
+
+  _TraceSparkle({
+    required this.x,
+    required this.y,
+    required this.vx,
+    required this.vy,
+    required this.color,
+  });
+}
+
 class _TracePainter extends CustomPainter {
   final List<Offset> points;
+  final List<_TraceSparkle> sparkles;
   final int number;
   final bool showingSuccess;
 
   _TracePainter({
     required this.points,
+    required this.sparkles,
     required this.number,
     required this.showingSuccess,
   });
@@ -396,28 +445,29 @@ class _TracePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (number > 20) return;
 
-    _drawDigitTemplate(canvas, size, number);
-    _drawSampleDots(canvas, size, number);
+    _drawChalkTemplate(canvas, size, number);
 
+    // Draw the continuous crayon line
     if (points.length >= 2) {
-      _drawTrace(canvas);
+      _drawRainbowCrayonTrace(canvas);
     }
 
+    // Draw dynamic sparkling stars under finger
+    _drawSparkles(canvas);
+
     if (showingSuccess) {
-      _drawSuccessOverlay(canvas, size);
+      _drawSuccessCheckmark(canvas, size);
     }
   }
 
-  void _drawDigitTemplate(Canvas canvas, Size size, int n) {
-    final text = n > 20 ? '' : '$n';
-    if (text.isEmpty) return;
-
-    final fontSize = size.width * 0.50;
+  void _drawChalkTemplate(Canvas canvas, Size size, int n) {
+    final text = '$n';
+    final fontSize = size.width * 0.58;
 
     final textStyle = TextStyle(
       fontSize: fontSize,
       fontWeight: FontWeight.w900,
-      color: AppColors.textDark.withValues(alpha: 0.08),
+      color: Colors.white.withValues(alpha: 0.12), // faint template guidelines on chalkboard
     );
 
     final tp = TextPainter(
@@ -432,76 +482,75 @@ class _TracePainter extends CustomPainter {
 
     canvas.save();
     canvas.translate(x, y);
-
     tp.paint(canvas, Offset.zero);
-
     canvas.restore();
   }
 
-  void _drawSampleDots(Canvas canvas, Size size, int n) {
-    final rng = Random(n * 37 + 42);
-    final textScale = size.width * 0.55;
-    final textW = textScale * _digitWidthFactor(n);
-    final textH = textScale;
-    final left = (size.width - textW) / 2;
-    final top = (size.height - textH) / 2;
-
-    final dotPaint = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.08)
-      ..style = PaintingStyle.fill;
-
-    for (int i = 0; i < 40; i++) {
-      final x = left + rng.nextDouble() * textW;
-      final y = top + rng.nextDouble() * textH;
-      canvas.drawCircle(Offset(x, y), 3, dotPaint);
-    }
-  }
-
-  double _digitWidthFactor(int n) {
-    if (n < 10) return 0.55;
-    return _digitWidthFactor(n % 10) + _digitWidthFactor(n ~/ 10) + 0.25;
-  }
-
-  void _drawTrace(Canvas canvas) {
-    final tracePaint = Paint()
-      ..color = AppColors.accent
+  void _drawRainbowCrayonTrace(Canvas canvas) {
+    // Elegant glow trace
+    final glowPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
+      ..strokeWidth = 24
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+
+    // Dynamic rainbow crayon cycling path
+    final tracePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
     for (int i = 0; i < points.length - 1; i++) {
-      canvas.drawLine(points[i], points[i + 1], tracePaint);
-    }
+      // Dynamic HSV brush color transition
+      final hue = (i * 3.0) % 360;
+      final brushColor = HSVColor.fromAHSV(1.0, hue, 0.85, 0.95).toColor();
 
-    final glowPaint = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      glowPaint.color = brushColor.withValues(alpha: 0.3);
+      tracePaint.color = brushColor;
 
-    for (int i = 0; i < points.length - 1; i++) {
       canvas.drawLine(points[i], points[i + 1], glowPaint);
+      canvas.drawLine(points[i], points[i + 1], tracePaint);
     }
   }
 
-  void _drawSuccessOverlay(Canvas canvas, Size size) {
+  void _drawSparkles(Canvas canvas) {
+    final starPaint = Paint()..style = PaintingStyle.fill;
+    
+    for (final s in sparkles) {
+      starPaint.color = s.color.withValues(alpha: s.life.clamp(0.0, 1.0));
+      
+      // Draw standard beautiful 4-point star sparkles
+      final path = Path();
+      final radius = 6.0 * s.life;
+      path.moveTo(s.x, s.y - radius);
+      path.quadraticBezierTo(s.x, s.y, s.x + radius, s.y);
+      path.quadraticBezierTo(s.x, s.y, s.x, s.y + radius);
+      path.quadraticBezierTo(s.x, s.y, s.x - radius, s.y);
+      path.quadraticBezierTo(s.x, s.y, s.x, s.y - radius);
+      path.close();
+      
+      canvas.drawPath(path, starPaint);
+    }
+  }
+
+  void _drawSuccessCheckmark(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.success.withValues(alpha: 0.25);
+      ..color = AppColors.success.withValues(alpha: 0.28);
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
-      size.shortestSide * 0.3,
+      size.shortestSide * 0.32,
       paint,
     );
 
     const text = '✓';
     final tp = TextPainter(
-      text: const TextSpan(
+      text: TextSpan(
         text: text,
         style: TextStyle(
           color: AppColors.success,
-          fontSize: 64,
+          fontSize: 84,
           fontWeight: FontWeight.w900,
         ),
       ),

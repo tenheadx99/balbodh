@@ -16,7 +16,6 @@ class FeedMonsterGame extends StatefulWidget {
 class _FeedMonsterGameState extends State<FeedMonsterGame> with TickerProviderStateMixin {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
-  final Random _random = Random();
 
   int _stars = 0;
   int _streak = 0;
@@ -287,7 +286,7 @@ class _FeedMonsterGameState extends State<FeedMonsterGame> with TickerProviderSt
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w850,
+              fontWeight: FontWeight.w800,
               color: AppColors.textDark,
             ),
           ),
@@ -297,7 +296,7 @@ class _FeedMonsterGameState extends State<FeedMonsterGame> with TickerProviderSt
         
         // Drag Target Monster mouth
         DragTarget<_FoodOption>(
-          onWillAcceptWidget: (data) {
+          onWillAcceptWithDetails: (details) {
             setState(() {
               _isDraggingOver = true;
               _monsterExpression = '😮'; // Opens mouth in anticipation!
@@ -362,7 +361,7 @@ class _FeedMonsterGameState extends State<FeedMonsterGame> with TickerProviderSt
           ),
           Text(
             '$_targetLetter ',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w950, color: AppColors.primary),
+            style: const TextStyle(fontSize: 24,           fontWeight: FontWeight.w900, color: AppColors.primary),
           ),
           Text(
             '($_targetObject)',
@@ -498,15 +497,13 @@ class _FoodOption {
   final String letter;
   final String emoji;
   final bool isCorrect;
-  bool caught;
-  bool wrong;
+  bool caught = false;
+  bool wrong = false;
 
   _FoodOption({
     required this.id,
     required this.letter,
     required this.emoji,
     required this.isCorrect,
-    this.caught = false,
-    this.wrong = false,
   });
 }
