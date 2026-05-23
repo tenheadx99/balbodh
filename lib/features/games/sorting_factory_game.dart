@@ -29,7 +29,7 @@ class _SortingFactoryGameState extends State<SortingFactoryGame> {
   int _stars = 0;
   int _level = 1;
   int _sorted = 0;
-  bool _dragging = false;
+
 
   @override
   void initState() {

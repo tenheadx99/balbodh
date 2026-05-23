@@ -328,8 +328,8 @@ class _MatchCard {
   final String display;
   final String emoji;
   final bool isLetter;
-  bool flipped;
-  bool matched;
+  bool flipped = false;
+  bool matched = false;
 
   _MatchCard({
     required this.id,
@@ -337,7 +337,5 @@ class _MatchCard {
     required this.display,
     required this.emoji,
     required this.isLetter,
-    this.flipped = false,
-    this.matched = false,
   });
 }

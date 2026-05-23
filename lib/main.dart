@@ -6,6 +6,7 @@ import 'services/progress_service.dart';
 import 'services/settings_service.dart';
 import 'services/streak_service.dart';
 import 'core/audio/sound_effect_service.dart';
+import 'services/ad_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,7 @@ void main() async {
   await SettingsService().init();
   await SoundEffectService().init();
   await StreakService().init();
+  await AdService().init();
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../services/ad_service.dart';
 import '../../games/bubble_widget.dart';
 import '../../games/reward_overlay.dart';
 import '../../models/bubble_letter.dart';
@@ -43,6 +44,7 @@ class _BubblePopGameState extends State<BubblePopGame>
 
   bool _hintActive = false;
   bool _showReward = false;
+  bool _showAdOffer = false;
   String _rewardMessage = '';
 
   late AnimationController _bgController;
@@ -337,11 +339,25 @@ class _BubblePopGameState extends State<BubblePopGame>
 
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      _showReward = false;
-      _currentLevel++;
-      _loadNextLevel();
-      setState(() {});
+      setState(() {
+        _showReward = false;
+        _showAdOffer = true;
+      });
     });
+  }
+
+  void _onAdRewarded() {
+    _stars += 3;
+    _sfx.playStreak();
+    _audio.speakEnglish('Bonus stars!');
+    _proceedAfterLevel();
+  }
+
+  void _proceedAfterLevel() {
+    _showAdOffer = false;
+    _currentLevel++;
+    _loadNextLevel();
+    setState(() {});
   }
 
   void _showCompletion() {
@@ -412,6 +428,87 @@ class _BubblePopGameState extends State<BubblePopGame>
               if (_showReward) _buildRewardOverlay(),
               if (_phase == GamePhase.complete && !_showReward)
                 _buildCompletionScreen(),
+              if (_showAdOffer) _buildAdOffer(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdOffer() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.4),
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('⭐', style: TextStyle(fontSize: 56)),
+              const SizedBox(height: 12),
+              const Text(
+                'Double your stars?',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Watch a short ad to earn 3 bonus stars!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textDark.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        AdService().showRewardedAd(onRewarded: _onAdRewarded);
+                      },
+                      icon: const Icon(Icons.play_circle, size: 20),
+                      label: const Text('Watch Ad'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.warning,
+                        foregroundColor: AppColors.textDark,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        textStyle: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _proceedAfterLevel,
+                      child: const Text('Skip',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark)),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

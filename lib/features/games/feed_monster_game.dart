@@ -333,15 +333,13 @@ class _FoodOption {
   final String letter;
   final String emoji;
   final bool isCorrect;
-  bool caught;
-  bool wrong;
+  bool caught = false;
+  bool wrong = false;
 
   _FoodOption({
     required this.id,
     required this.letter,
     required this.emoji,
     required this.isCorrect,
-    this.caught = false,
-    this.wrong = false,
   });
 }

@@ -45,16 +45,12 @@ class _WordWormGameState extends State<WordWormGame> {
     setState(() {});
   }
 
-  String get _display {
-    final chars = _word.split('');
-    chars[_missingIndex] = '?';
-    return chars.join(' ');
-  }
-
   List<String> _options() {
     final opts = <String>{_missing};
     final pool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.replaceAll(_missing, '');
-    for (int i = 0; i < 3; i++) opts.add(pool[_random.nextInt(pool.length)]);
+    for (int i = 0; i < 3; i++) {
+      opts.add(pool[_random.nextInt(pool.length)]);
+    }
     return opts.toList()..shuffle();
   }
 

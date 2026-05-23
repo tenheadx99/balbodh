@@ -69,7 +69,9 @@ class _PizzaChefGameState extends State<PizzaChefGame> {
     final target = _toppings[_currentIdx].$1;
     final opts = <String>{target};
     final pool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.replaceAll(target, '');
-    for (int i = 0; i < 3; i++) opts.add(pool[_random.nextInt(pool.length)]);
+    for (int i = 0; i < 3; i++) {
+      opts.add(pool[_random.nextInt(pool.length)]);
+    }
     return opts.toList()..shuffle();
   }
 

@@ -21,7 +21,7 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
   int _nextId = 0;
   int _stars = 0;
   int _level = 1;
-  int _caught = 0;
+  int _caught = 0; // ignore: unused_field
   String _target = 'A';
 
   Timer? _swimTimer;

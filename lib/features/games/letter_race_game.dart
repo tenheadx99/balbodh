@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
@@ -15,8 +13,6 @@ class LetterRaceGame extends StatefulWidget {
 class _LetterRaceGameState extends State<LetterRaceGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
-  final Random _random = Random();
-
   final List<String> _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   int _currentIndex = 0;
   int _stars = 0;
@@ -47,8 +43,11 @@ class _LetterRaceGameState extends State<LetterRaceGame> {
         _level++;
         _audio.speakEnglish('Level $_level!');
       }
-      if (_currentIndex < _letters.length) _nextTarget();
-      else _sfx.playFanfare();
+      if (_currentIndex < _letters.length) {
+        _nextTarget();
+      } else {
+        _sfx.playFanfare();
+      }
       setState(() {});
     } else {
       _sfx.playWrong();
@@ -61,7 +60,9 @@ class _LetterRaceGameState extends State<LetterRaceGame> {
     final target = _letters[_currentIndex];
     final opts = <String>{target};
     final pool = _letters.where((l) => l != target).toList()..shuffle();
-    for (int i = 0; i < 3 && i < pool.length; i++) opts.add(pool[i]);
+    for (int i = 0; i < 3 && i < pool.length; i++) {
+      opts.add(pool[i]);
+    }
     return opts.toList()..shuffle();
   }
 

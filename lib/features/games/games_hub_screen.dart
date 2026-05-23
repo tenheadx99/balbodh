@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../services/streak_service.dart';
+import '../../widgets/ad_banner_widget.dart';
 import 'letter_rain_game.dart';
 import 'feed_monster_game.dart';
 import 'memory_match_game.dart';
@@ -14,6 +15,8 @@ import 'letter_fishing_game.dart';
 import 'pizza_chef_game.dart';
 import 'rocket_builder_game.dart';
 import 'pattern_puzzle_game.dart';
+import 'crayon_canvas_game.dart';
+import 'phonics_soundboard.dart';
 
 class GamesHubScreen extends StatelessWidget {
   const GamesHubScreen({super.key});
@@ -21,6 +24,8 @@ class GamesHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final games = [
+      ('🎨', 'Crayon Canvas', 'Color Star, Moon, Sun, Apple!', Color(0xFF4DB6AC), const CrayonCanvasGame()),
+      ('🗣️', 'Phonics Soundboard', 'English & Hindi Phonics sounds', Color(0xFF9575CD), const PhonicsSoundboard()),
       ('🌧️', 'Letter Rain', 'Tap correct falling letter', Color(0xFF42A5F5), const LetterRainGame()),
       ('👾', 'Feed the Monster', 'Feed the right letter to monster', Color(0xFF66BB6A), const FeedMonsterGame()),
       ('🃏', 'Memory Match', 'Match letter-picture pairs', Color(0xFFAB47BC), const MemoryMatchGame()),
@@ -45,32 +50,39 @@ class GamesHubScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Row(children: [
-                  IconButton(icon: const Icon(Icons.arrow_back, size: 28, color: AppColors.textDark), onPressed: () => Navigator.pop(context)),
-                  const Spacer(),
-                ]),
-                const Text('🎮 Fun Games', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.textDark)),
-                Text('${games.length} games to play!', style: TextStyle(fontSize: 14, color: AppColors.textDark.withValues(alpha: 0.7))),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.95,
-                    children: games.map((g) => _MiniCard(
-                      emoji: g.$1, title: g.$2, desc: g.$3, color: g.$4,
-                      onTap: () { StreakService().markToday(); Navigator.push(context, MaterialPageRoute(builder: (_) => g.$5)); },
-                    )).toList(),
+          child: Column(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        IconButton(icon: const Icon(Icons.arrow_back, size: 28, color: AppColors.textDark), onPressed: () => Navigator.pop(context)),
+                        const Spacer(),
+                      ]),
+                      const Text('🎮 Fun Games', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.textDark)),
+                      Text('${games.length} games to play!', style: TextStyle(fontSize: 14, color: AppColors.textDark.withValues(alpha: 0.7))),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: GridView.count(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.95,
+                          children: games.map((g) => _MiniCard(
+                            emoji: g.$1, title: g.$2, desc: g.$3, color: g.$4,
+                            onTap: () { StreakService().markToday(); Navigator.push(context, MaterialPageRoute(builder: (_) => g.$5)); },
+                          )).toList(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const AdBannerWidget(),
+            ],
           ),
         ),
       ),
