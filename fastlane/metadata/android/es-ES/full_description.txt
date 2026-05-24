@@ -1,0 +1,5 @@
+Descripción completa en español de la aplicación. Explique qué hace su aplicación, sus características clave y por qué los usuarios deberían descargarla.
+
+Característica 1: Descripción de la característica 1
+Característica 2: Descripción de la característica 2
+Característica 3: Descripción de la característica 3

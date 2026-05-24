@@ -1,0 +1,62 @@
+name: Deploy to Google Play Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Version name (e.g., 1.0.1)"
+        required: true
+      version_code:
+        description: "Version code (e.g., 2)"
+        required: true
+        type: number
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Install fastlane
+        run: gem install fastlane
+
+      - name: Decode service account key
+        run: |
+          echo '${{ secrets.PLAY_JSON_KEY }}' > /tmp/play-key.json
+
+      - name: Decode keystore
+        run: |
+          echo '${{ secrets.KEYSTORE_BASE64 }}' | base64 -d > keystore/upload-keystore.jks
+
+      - name: Create key.properties
+        run: |
+          cat > android/key.properties << EOF
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=upload
+          storeFile=../keystore/upload-keystore.jks
+          EOF
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Deploy to Play Store
+        run: fastlane android deploy_all
+        env:
+          PLAY_JSON_KEY: /tmp/play-key.json

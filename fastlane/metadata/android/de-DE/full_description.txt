@@ -1,0 +1,5 @@
+Deutsche vollständige Beschreibung der App. Erklären Sie, was Ihre App tut, ihre Hauptfunktionen und warum Benutzer sie herunterladen sollten.
+
+Funktion 1: Beschreibung von Funktion 1
+Funktion 2: Beschreibung von Funktion 2
+Funktion 3: Beschreibung von Funktion 3

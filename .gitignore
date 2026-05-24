@@ -44,6 +44,19 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Keystore and signing
+keystore/
+android/key.properties
+*.jks
+*.keystore
+
+# Google Play service account key
+*.json
+!pubspec.yaml
+!analysis_options.yaml
+!.fvm/flutter_sdk/**
+!**/android/app/src/**/*.json
+
 # Local configuration
 .env*
 .flutter-plugins
@@ -51,6 +64,11 @@ app.*.map.json
 .pub-cache/
 .pub/
 build/
+
+# fastlane secrets
+fastlane/*.json
+!fastlane/content_rating_answers.json
+fastlane/Appfile
 
 # iOS related
 **/ios/Flutter/Generated.xcconfig

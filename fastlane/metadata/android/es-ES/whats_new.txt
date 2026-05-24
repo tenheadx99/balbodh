@@ -1,0 +1,3 @@
+• Versión inicial
+• Funciones principales implementadas
+• Corrección de errores y mejoras de rendimiento

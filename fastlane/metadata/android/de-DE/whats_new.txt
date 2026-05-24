@@ -1,0 +1,3 @@
+• Erste Veröffentlichung
+• Kernfunktionen implementiert
+• Fehlerbehebungen und Leistungsverbesserungen

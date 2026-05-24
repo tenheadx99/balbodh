@@ -1,0 +1,5 @@
+Description complète en français de l'application. Expliquez ce que fait votre application, ses principales fonctionnalités et pourquoi les utilisateurs devraient la télécharger.
+
+Fonctionnalité 1 : Description de la fonctionnalité 1
+Fonctionnalité 2 : Description de la fonctionnalité 2
+Fonctionnalité 3 : Description de la fonctionnalité 3
