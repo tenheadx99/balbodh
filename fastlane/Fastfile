@@ -32,15 +32,18 @@ platform :android do
       locale_dir = File.join(PROJECT_ROOT, "fastlane", "metadata", "android", locale)
       FileUtils.mkdir_p(locale_dir)
 
-      # Write individual text files
+      # Write individual text files. Release notes must live in
+      # changelogs/ — supply ignores any other filename for them.
       {
         "title" => "title.txt",
         "short_description" => "short_description.txt",
         "full_description" => "full_description.txt",
-        "whats_new" => "whats_new.txt"
+        "whats_new" => File.join("changelogs", "default.txt")
       }.each do |key, filename|
         if data[key] && !data[key].strip.empty?
-          File.write(File.join(locale_dir, filename), data[key].strip)
+          target = File.join(locale_dir, filename)
+          FileUtils.mkdir_p(File.dirname(target))
+          File.write(target, data[key].strip)
           UI.message("Updated #{filename} for #{locale}")
         end
       end

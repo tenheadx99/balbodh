@@ -5,6 +5,7 @@ import 'app.dart';
 import 'services/progress_service.dart';
 import 'services/settings_service.dart';
 import 'services/streak_service.dart';
+import 'services/usage_service.dart';
 import 'core/audio/sound_effect_service.dart';
 import 'services/ad_service.dart';
 
@@ -16,6 +17,7 @@ void main() async {
   await SettingsService().init();
   await SoundEffectService().init();
   await StreakService().init();
+  await UsageService().init();
   await AdService().init();
 
   SystemChrome.setPreferredOrientations([

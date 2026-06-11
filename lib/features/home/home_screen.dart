@@ -14,6 +14,7 @@ import '../mascot/mascot_widget.dart';
 import '../mascot/mascot_playroom_screen.dart';
 import '../games/games_hub_screen.dart';
 import '../../widgets/ad_banner_widget.dart';
+import '../../widgets/parent_gate.dart';
 import '../../widgets/rewarded_ad_button.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -96,10 +97,9 @@ class HomeScreen extends StatelessWidget {
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => SettingsScreen(),
-                              ),
+                            onTap: () => _openGated(
+                              context,
+                              (_) => const SettingsScreen(),
                             ),
                             child: Container(
                               width: 44,
@@ -116,11 +116,10 @@ class HomeScreen extends StatelessWidget {
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ParentDashboard(
-                                    progressService: _progress),
-                              ),
+                            onTap: () => _openGated(
+                              context,
+                              (_) => ParentDashboard(
+                                  progressService: _progress),
                             ),
                             child: Container(
                               width: 44,
@@ -276,6 +275,13 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openGated(
+      BuildContext context, WidgetBuilder builder) async {
+    if (!await showParentGate(context)) return;
+    if (!context.mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: builder));
   }
 
   void _startGame(BuildContext context, ModuleType module) {

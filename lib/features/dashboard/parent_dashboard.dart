@@ -4,6 +4,7 @@ import '../../models/bubble_letter.dart';
 import '../../models/game_progress.dart';
 import '../../models/sticker.dart';
 import '../../services/progress_service.dart';
+import '../../services/usage_service.dart';
 
 class ParentDashboard extends StatelessWidget {
   final ProgressService progressService;
@@ -48,6 +49,10 @@ class ParentDashboard extends StatelessWidget {
                 const SizedBox(height: 24),
                 _buildSummaryCards(totalStars, collectedStickers,
                     totalStickers),
+                const SizedBox(height: 24),
+                _buildSectionTitle('⏱️ Screen Time'),
+                const SizedBox(height: 12),
+                const _ScreenTimeCard(),
                 const SizedBox(height: 24),
                 _buildSectionTitle('📚 Letters Progress'),
                 const SizedBox(height: 12),
@@ -451,6 +456,110 @@ class _SummaryCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               color: AppColors.textDark.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScreenTimeCard extends StatefulWidget {
+  const _ScreenTimeCard();
+
+  @override
+  State<_ScreenTimeCard> createState() => _ScreenTimeCardState();
+}
+
+class _ScreenTimeCardState extends State<_ScreenTimeCard> {
+  final UsageService _usage = UsageService();
+
+  static const _options = [0, 15, 30, 45, 60, 90];
+
+  @override
+  void initState() {
+    super.initState();
+    _usage.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    _usage.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final limit = _usage.dailyLimitMinutes;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('⏱️', style: TextStyle(fontSize: 32)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Daily Limit',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    Text(
+                      'Played today: ${_usage.usedMinutesToday} min',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textDark.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _options.map((minutes) {
+              final selected = minutes == limit;
+              return ChoiceChip(
+                label: Text(minutes == 0 ? 'Off' : '$minutes min'),
+                selected: selected,
+                selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                onSelected: (_) => _usage.setDailyLimitMinutes(minutes),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'When the limit is reached, a break screen appears. '
+            'Only a parent can add more time.',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textDark.withValues(alpha: 0.5),
             ),
           ),
         ],
