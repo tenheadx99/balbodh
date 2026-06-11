@@ -1,6 +1,10 @@
 require 'fileutils'
+require 'json'
 
 default_platform(:android)
+
+# Global project root path
+PROJECT_ROOT = File.expand_path("..", __dir__)
 
 platform :android do
   desc "Build signed release AAB"
@@ -15,58 +19,126 @@ platform :android do
     sh("flutter", "build", "apk", "--release")
   end
 
+  desc "Sync text metadata from Metadata.json"
+  lane :sync_text_metadata do
+    metadata_file = File.join(PROJECT_ROOT, "fastlane", "Metadata.json")
+    unless File.exist?(metadata_file)
+      UI.user_error!("Metadata.json not found at #{metadata_file}")
+    end
+
+    metadata = JSON.parse(File.read(metadata_file))
+    
+    metadata.each do |locale, data|
+      locale_dir = File.join(PROJECT_ROOT, "fastlane", "metadata", "android", locale)
+      FileUtils.mkdir_p(locale_dir)
+
+      # Write individual text files
+      {
+        "title" => "title.txt",
+        "short_description" => "short_description.txt",
+        "full_description" => "full_description.txt",
+        "whats_new" => "whats_new.txt"
+      }.each do |key, filename|
+        if data[key] && !data[key].strip.empty?
+          File.write(File.join(locale_dir, filename), data[key].strip)
+          UI.message("Updated #{filename} for #{locale}")
+        end
+      end
+    end
+    UI.success("Text metadata successfully updated from Metadata.json!")
+  end
+
   desc "Sync manually placed screenshots into metadata folders"
   lane :sync_screenshots do
     locales = ["en-US", "de-DE", "es-ES", "fr-FR", "hi-IN"]
     locales.each do |locale|
-      src = "screenshots/#{locale}"
-      dst = "fastlane/metadata/android/#{locale}/images/phoneScreenshots"
+      src = File.join(PROJECT_ROOT, "screenshots", locale)
+      dst = File.join(PROJECT_ROOT, "fastlane", "metadata", "android", locale, "images", "phoneScreenshots")
       if Dir.exist?(src)
         FileUtils.mkdir_p(dst)
-        Dir.glob("#{src}/*.png").sort.each_with_index do |f, i|
-          FileUtils.cp(f, "#{dst}/#{format('%02d', i + 1)}_screenshot.png")
+        # Remove existing screenshots to avoid duplicate or stale items
+        FileUtils.rm_f(Dir.glob(File.join(dst, "*")))
+        
+        files = Dir.glob(File.join(src, "*.{png,jpg,jpeg}")).sort
+        files.each_with_index do |f, i|
+          ext = File.extname(f)
+          FileUtils.cp(f, File.join(dst, "#{format('%02d', i + 1)}_screenshot#{ext}"))
         end
+        UI.message("Synced #{files.length} screenshots for #{locale}")
       end
     end
     UI.success("Screenshots synced to metadata folders")
   end
 
-  desc "Deploy to production"
+  desc "Sync all metadata (text and screenshots)"
+  lane :sync_metadata do
+    sync_text_metadata
+    sync_screenshots
+  end
+
+  desc "Deploy to production: build + upload bundle + update listing & screenshots"
   lane :deploy do
+    # Validate Google Play credentials
+    unless ENV["PLAY_JSON_KEY"]
+      UI.user_error!("PLAY_JSON_KEY environment variable is missing. Please set it to deploy to production.")
+    end
+
+    # Sync metadata and screenshots first
+    sync_metadata
+
+    # Build the signed release AAB
     build_signed
-    upload_to_play_store(
+
+    # Dynamic credential handling
+    play_key = ENV["PLAY_JSON_KEY"]
+    upload_params = {
       track: "production",
       release_status: "completed",
+      aab: File.join(PROJECT_ROOT, "build", "app", "outputs", "bundle", "release", "app-release.aab"),
       skip_upload_apk: true,
       skip_upload_metadata: false,
       skip_upload_images: false,
       skip_upload_screenshots: false,
-      metadata_path: "fastlane/metadata/android"
-    )
+      metadata_path: File.join(PROJECT_ROOT, "fastlane", "metadata", "android")
+    }
+
+    if play_key
+      if play_key.strip.start_with?("{")
+        upload_params[:json_key_data] = play_key
+      else
+        upload_params[:json_key] = play_key
+      end
+    end
+
+    # Upload AAB and metadata to production
+    upload_to_play_store(upload_params)
   end
 
   desc "Full deploy to production: build + upload + content rating"
   lane :deploy_all do
-    build_signed
-    upload_to_play_store(
-      track: "production",
-      release_status: "completed",
-      skip_upload_apk: true,
-      skip_upload_metadata: false,
-      skip_upload_images: false,
-      skip_upload_screenshots: false,
-      metadata_path: "fastlane/metadata/android"
-    )
+    # Validates and uploads everything
+    deploy
     submit_content_rating
   end
 
   desc "Submit content rating questionnaire"
   lane :submit_content_rating do
-    supply(
+    play_key = ENV["PLAY_JSON_KEY"]
+    params = {
       track: "production",
-      json_key: ENV["PLAY_JSON_KEY"],
       content_rating: true,
-      content_rating_answers_file: "fastlane/content_rating_answers.json"
-    )
+      content_rating_answers_file: File.join(PROJECT_ROOT, "fastlane", "content_rating_answers.json")
+    }
+
+    if play_key
+      if play_key.strip.start_with?("{")
+        params[:json_key_data] = play_key
+      else
+        params[:json_key] = play_key
+      end
+    end
+
+    supply(params)
   end
 end
+

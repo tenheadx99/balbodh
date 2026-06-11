@@ -1,4 +1,4 @@
-package com.balbodh.balbodh
+package com.tenhead.balbodh
 
 import io.flutter.embedding.android.FlutterActivity
 

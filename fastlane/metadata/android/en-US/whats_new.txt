@@ -1,3 +1,8 @@
-• Initial release
-• Core features implemented
-• Bug fixes and performance improvements
+Welcome to the initial launch of Balbodh!
+• Learn Hindi Varnamala (vowels/consonants) with clear audio pronunciation.
+• Master English Alphabets (ABC) through fun bubble-popping gameplay.
+• Interactive 123 Math Hub: Fun counting games and basic arithmetic.
+• 15+ mini-games: Crayon Canvas (coloring), Feed the Monster, Memory Match.
+• Reward System: Earn cute digital stickers for completing tasks.
+• Track progress with the Parent Dashboard.
+• 100% child-safe, ad-supported, and offline-ready!

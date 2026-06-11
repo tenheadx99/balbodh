@@ -1,3 +1,8 @@
-• Version initiale
-• Fonctionnalités de base implémentées
-• Corrections de bugs et améliorations de performances
+Bienvenue pour le lancement initial de Balbodh !
+• Apprenez la Varnamala hindi (voyelles/consonnes) avec une prononciation audio claire.
+• Maîtrisez l'alphabet anglais (ABC) en éclatant des ballons.
+• Espace maths interactif 123 : Jeux de comptage et arithmétique de base.
+• Plus de 15 mini-jeux : Coloriage, Nourrir le monstre, Memory Match.
+• Système de récompenses : Gagnez des autocollants numériques mignons.
+• Suivi des progrès grâce au tableau de bord parents.
+• 100 % sécurisé pour les enfants et utilisable hors ligne !

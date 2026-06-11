@@ -1,5 +1,18 @@
-Description complète en français de l'application. Expliquez ce que fait votre application, ses principales fonctionnalités et pourquoi les utilisateurs devraient la télécharger.
+Bienvenue sur Balbodh - l'application ultime d'apprentissage et de jeu interactif conçue spécialement pour les enfants !
 
-Fonctionnalité 1 : Description de la fonctionnalité 1
-Fonctionnalité 2 : Description de la fonctionnalité 2
-Fonctionnalité 3 : Description de la fonctionnalité 3
+Balbodh offre un environnement amusant, engageant et coloré où les enfants peuvent acquérir des compétences fondamentales grâce à des jeux interactifs, des défis stimulants et une mascotte adorable.
+
+✨ Caractéristiques principales :
+• Alphabet anglais (ABC) : Maîtrisez les lettres anglaises et le vocabulaire de base grâce à des effets sonores interactifs.
+• Alphabet hindi (अ आ इ) : Apprenez la Varnamala hindi avec une prononciation audio claire et de haute qualité.
+• Maths & Calcul (1 2 3) : Un espace mathématique interactif proposant des jeux de comptage et de l'arithmétique simple.
+• Mini-jeux passionnants :
+  - Toile de crayons (Crayon Canvas) : Laissez libre cours à la créativité avec des outils de coloriage et de dessin.
+  - Nourrir le monstre (Feed the Monster) : Un jeu de tri amusant qui renforce les capacités cognitives.
+  - Éclater les ballons (Balloon Pop) : Apprenez les lettres, les chiffres et les couleurs en éclatant des ballons !
+• Album d'autocollants récompenses : Les enfants gagnent des autocollants numériques en accomplissant leurs tâches quotidiennes.
+• Système de série quotidienne : Encouragez la régularité grâce à un suivi des séries de connexion.
+• Tableau de bord parent : Suivez les progrès d'apprentissage de votre enfant et ajustez les paramètres.
+• Sécurisé et adapté aux enfants : Des visuels charmants et une mascotte attachante pour jouer en toute sécurité.
+
+Transformez le temps d'écran en une aventure éducative captivante avec Balbodh !
