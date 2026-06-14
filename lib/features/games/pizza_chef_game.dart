@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class PizzaChefGame extends StatefulWidget {
   const PizzaChefGame({super.key});
@@ -14,6 +16,7 @@ class PizzaChefGame extends StatefulWidget {
 class _PizzaChefGameState extends State<PizzaChefGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   static const _toppings = [
@@ -40,6 +43,7 @@ class _PizzaChefGameState extends State<PizzaChefGame> {
       _pizzasMade++;
       _sfx.playFanfare();
       _audio.speakEnglish('Pizza complete!');
+      showRewardOverlay(context, message: 'Pizza\nReady!');
       setState(() {});
       return;
     }
@@ -53,6 +57,7 @@ class _PizzaChefGameState extends State<PizzaChefGame> {
     final t = _toppings[_currentIdx];
     if (letter == t.$1) {
       _stars++;
+      _progress.addStar('games');
       _addedToppings.add(t.$2);
       _currentIdx++;
       _sfx.playCorrect();

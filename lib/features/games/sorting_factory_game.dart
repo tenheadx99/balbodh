@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class SortingFactoryGame extends StatefulWidget {
   const SortingFactoryGame({super.key});
@@ -14,11 +16,12 @@ class SortingFactoryGame extends StatefulWidget {
 class _SortingFactoryGameState extends State<SortingFactoryGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   static const _items = [
     ('🍎', 'A'), ('⚽', 'B'), ('🐱', 'C'), ('🐶', 'D'), ('🐘', 'E'),
-    ('🐟', 'F'), ('🍦', 'G'), ('🎩', 'H'), ('🍦', 'I'), ('🏺', 'J'),
+    ('🐟', 'F'), ('🍇', 'G'), ('🎩', 'H'), ('🍦', 'I'), ('🏺', 'J'),
     ('🪁', 'K'), ('🦁', 'L'), ('🐵', 'M'), ('🪺', 'N'), ('🍊', 'O'),
     ('🐧', 'P'), ('👑', 'Q'), ('🐰', 'R'), ('☀️', 'S'), ('🐯', 'T'),
     ('☂️', 'U'), ('🎻', 'V'), ('⌚', 'W'), ('🎵', 'X'), ('🐃', 'Y'), ('🦓', 'Z'),
@@ -26,6 +29,7 @@ class _SortingFactoryGameState extends State<SortingFactoryGame> {
 
   final List<_SortItem> _queue = [];
   _SortItem? _current;
+  List<String> _bins = [];
   int _stars = 0;
   int _level = 1;
   int _sorted = 0;
@@ -42,8 +46,20 @@ class _SortingFactoryGameState extends State<SortingFactoryGame> {
     final shuffled = List.of(_items)..shuffle(_random);
     final target = shuffled[0];
     _current = _SortItem(emoji: target.$1, letter: target.$2);
+    _bins = _pickBins(target.$2);
     _audio.speakEnglish('Sort ${target.$2} for ${target.$1}!');
     setState(() {});
+  }
+
+  // Bins are fixed per item so a wrong tap doesn't reshuffle them.
+  List<String> _pickBins(String targetLetter) {
+    final letters = <String>[targetLetter];
+    final pool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.replaceAll(targetLetter, '');
+    while (letters.length < 3) {
+      final l = pool[_random.nextInt(pool.length)];
+      if (!letters.contains(l)) letters.add(l);
+    }
+    return letters..shuffle(_random);
   }
 
   void _dropOnBin(String binLetter) {
@@ -51,9 +67,14 @@ class _SortingFactoryGameState extends State<SortingFactoryGame> {
     if (binLetter == _current!.letter) {
       _sorted++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish('Correct! ${_current!.letter}!');
-      if (_sorted % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
+      if (_sorted % 5 == 0) {
+        _level++;
+        _audio.speakEnglish('Level $_level!');
+        showRewardOverlay(context, message: 'Level $_level!');
+      }
       _nextItem();
     } else {
       _sfx.playWrong();
@@ -113,7 +134,7 @@ class _SortingFactoryGameState extends State<SortingFactoryGame> {
         child: Column(children: [
           Text(_current!.emoji, style: const TextStyle(fontSize: 64)),
           const SizedBox(height: 8),
-          const Text('Drag me to the right bin!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
+          const Text('Tap the right bin!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
         ]),
       ),
       const SizedBox(height: 12),
@@ -122,19 +143,11 @@ class _SortingFactoryGameState extends State<SortingFactoryGame> {
   }
 
   Widget _buildBins() {
-    final letters = <String>[_current!.letter];
-    final pool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.replaceAll(_current!.letter, '');
-    for (int i = 0; i < 2; i++) {
-      final l = pool[_random.nextInt(pool.length)];
-      if (!letters.contains(l)) letters.add(l);
-    }
-    letters.shuffle(_random);
-
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: letters.map((l) => GestureDetector(
+        children: _bins.map((l) => GestureDetector(
           onTap: () => _dropOnBin(l),
           child: Container(
             width: 90, height: 100,

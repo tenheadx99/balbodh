@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class LetterRaceGame extends StatefulWidget {
   const LetterRaceGame({super.key});
@@ -13,6 +15,7 @@ class LetterRaceGame extends StatefulWidget {
 class _LetterRaceGameState extends State<LetterRaceGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final List<String> _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   int _currentIndex = 0;
   int _stars = 0;
@@ -36,6 +39,7 @@ class _LetterRaceGameState extends State<LetterRaceGame> {
   void _pickLetter(String letter) {
     if (letter == _letters[_currentIndex]) {
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish(letter);
       _currentIndex++;
@@ -47,6 +51,7 @@ class _LetterRaceGameState extends State<LetterRaceGame> {
         _nextTarget();
       } else {
         _sfx.playFanfare();
+        showRewardOverlay(context, message: 'Race\nComplete!');
       }
       setState(() {});
     } else {
@@ -115,7 +120,12 @@ class _LetterRaceGameState extends State<LetterRaceGame> {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(children: [
-        const Text('🚗', style: TextStyle(fontSize: 40)),
+        AnimatedAlign(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          alignment: Alignment(-1 + 2 * progress, 0),
+          child: const Text('🚗', style: TextStyle(fontSize: 40)),
+        ),
         const SizedBox(height: 4),
         ClipRRect(
           borderRadius: BorderRadius.circular(12),

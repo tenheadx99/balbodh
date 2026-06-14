@@ -15,7 +15,6 @@ import '../mascot/mascot_playroom_screen.dart';
 import '../games/games_hub_screen.dart';
 import '../../widgets/ad_banner_widget.dart';
 import '../../widgets/parent_gate.dart';
-import '../../widgets/rewarded_ad_button.dart';
 
 class HomeScreen extends StatelessWidget {
   final ProgressService _progress = ProgressService();
@@ -246,18 +245,6 @@ class HomeScreen extends StatelessWidget {
                                         color: Colors.white, size: 20),
                                   ],
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: RewardedAdButton(
-                                emoji: '⭐',
-                                label: 'Watch ad for a free star!',
-                                subtitle: 'Supports the app & earns you rewards',
-                                onRewarded: () {
-                                  _progress.addStar('abc');
-                                },
                               ),
                             ),
                             const SizedBox(height: 16),

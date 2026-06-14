@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class NumberCircusGame extends StatefulWidget {
   const NumberCircusGame({super.key});
@@ -14,6 +16,7 @@ class NumberCircusGame extends StatefulWidget {
 class _NumberCircusGameState extends State<NumberCircusGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
   static const _animals = ['🐒', '🐘', '🦁', '🐯', '🐻', '🦊', '🐰', '🐸'];
 
@@ -67,9 +70,14 @@ class _NumberCircusGameState extends State<NumberCircusGame> {
     if (sum == _targetSum) {
       _done++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish('$_targetSum! Great!');
-      if (_done % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
+      if (_done % 5 == 0) {
+        _level++;
+        _audio.speakEnglish('Level $_level!');
+        showRewardOverlay(context, message: 'Level $_level!');
+      }
       _newRound();
     } else {
       _sfx.playWrong();

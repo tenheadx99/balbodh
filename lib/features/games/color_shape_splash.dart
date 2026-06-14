@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class ColorShapeSplash extends StatefulWidget {
   const ColorShapeSplash({super.key});
@@ -14,6 +16,7 @@ class ColorShapeSplash extends StatefulWidget {
 class _ColorShapeSplashState extends State<ColorShapeSplash> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   static const _shapes = ['●', '■', '▲', '★', '⬟'];
@@ -60,9 +63,14 @@ class _ColorShapeSplashState extends State<ColorShapeSplash> {
     if (_tiles[idx].isTarget) {
       _stars++;
       _correct++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish('Great!');
-      if (_correct % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
+      if (_correct % 5 == 0) {
+        _level++;
+        _audio.speakEnglish('Level $_level!');
+        showRewardOverlay(context, message: 'Level $_level!');
+      }
       _newRound();
     } else {
       _sfx.playWrong();

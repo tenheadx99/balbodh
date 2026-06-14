@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
 import '../../models/bubble_letter.dart';
+import '../../services/progress_service.dart';
 
 class MemoryMatchGame extends StatefulWidget {
   const MemoryMatchGame({super.key});
@@ -14,6 +16,7 @@ class MemoryMatchGame extends StatefulWidget {
 class _MemoryMatchGameState extends State<MemoryMatchGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
 
   static const _pairCount = 6;
   final List<_MatchCard> _cards = [];
@@ -96,6 +99,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
     if (first.pairId == second.pairId) {
       _matches++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish('Match!');
 
@@ -109,6 +113,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
         });
         if (_matches >= _pairCount) {
           _audio.speakEnglish('You did it! All matched!');
+          showRewardOverlay(context, message: 'All\nMatched!');
         }
       });
     } else {

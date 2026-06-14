@@ -5,6 +5,7 @@ import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
 import '../../games/reward_overlay.dart';
 import '../../models/math_question.dart';
+import '../../services/progress_service.dart';
 
 class CountingGame extends StatefulWidget {
   const CountingGame({super.key});
@@ -16,6 +17,7 @@ class CountingGame extends StatefulWidget {
 class _CountingGameState extends State<CountingGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   int _level = 1;
@@ -52,12 +54,14 @@ class _CountingGameState extends State<CountingGame> {
       _streak++;
       _stars++;
       _correctCount++;
+      _progress.addStar('math');
       _sfx.playCorrect();
       _audio.speakEnglish('Correct! ${_current!.correctAnswer}!');
 
       if (_streak >= 3) {
         _rewardMessage = '🔥 Amazing streak!';
         _stars++;
+        _progress.addStar('math');
         _sfx.playStreak();
       } else {
         _rewardMessage = '⭐ Great!';

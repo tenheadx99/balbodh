@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
 import '../../models/bubble_letter.dart';
+import '../../services/progress_service.dart';
 import '../../services/settings_service.dart';
 import '../mascot/mascot_widget.dart';
 
@@ -19,6 +21,7 @@ class _LetterRainGameState extends State<LetterRainGame>
     with TickerProviderStateMixin {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   final List<_FallingLetter> _letters = [];
@@ -125,6 +128,7 @@ class _LetterRainGameState extends State<LetterRainGame>
     if (letter.isTarget) {
       _caught++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish(_targetLetter);
 
@@ -132,6 +136,7 @@ class _LetterRainGameState extends State<LetterRainGame>
         _level++;
         _caught = 0;
         _audio.speakEnglish('Level $_level!');
+        showRewardOverlay(context, message: 'Level $_level!');
       }
 
       _nextTarget();

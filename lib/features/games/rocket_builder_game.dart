@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class RocketBuilderGame extends StatefulWidget {
   const RocketBuilderGame({super.key});
@@ -14,6 +16,7 @@ class RocketBuilderGame extends StatefulWidget {
 class _RocketBuilderGameState extends State<RocketBuilderGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   int _parts = 0;
@@ -54,6 +57,7 @@ class _RocketBuilderGameState extends State<RocketBuilderGame> {
       _parts++;
       _stars++;
       _answered++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish('$_targetLetter! Part added!');
       if (_answered % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
@@ -61,6 +65,7 @@ class _RocketBuilderGameState extends State<RocketBuilderGame> {
         _launched = true;
         _sfx.playFanfare();
         _audio.speakEnglish('Rocket complete! 3, 2, 1, Blast off!');
+        showRewardOverlay(context, message: 'Blast Off!');
         setState(() {});
       } else {
         _newQuestion();

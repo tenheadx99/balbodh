@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class LetterFishingGame extends StatefulWidget {
   const LetterFishingGame({super.key});
@@ -15,7 +17,11 @@ class LetterFishingGame extends StatefulWidget {
 class _LetterFishingGameState extends State<LetterFishingGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
+
+  double _pondW = 320;
+  double _pondH = 400;
 
   final List<_Fish> _fish = [];
   int _nextId = 0;
@@ -39,8 +45,8 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
       setState(() {
         for (final f in _fish) {
           f.x += f.dir * f.speed;
-          if (f.x < 10 || f.x > 320) f.dir *= -1;
-          f.y += sin(f.x * 0.05) * 0.3;
+          if (f.x < 10 || f.x > _pondW - 50) f.dir *= -1;
+          f.y = (f.y + sin(f.x * 0.05) * 0.3).clamp(10, _pondH - 50);
         }
       });
     });
@@ -58,8 +64,8 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
     for (final l in letters) {
       _fish.add(_Fish(
         id: _nextId++, letter: l,
-        x: 20 + _random.nextDouble() * 280,
-        y: 50 + _random.nextDouble() * 350,
+        x: 20 + _random.nextDouble() * (_pondW - 80),
+        y: 20 + _random.nextDouble() * (_pondH - 80),
         speed: 0.4 + _random.nextDouble() * 0.6,
         dir: _random.nextBool() ? 1 : -1,
       ));
@@ -73,15 +79,24 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
   }
 
   void _tapFish(int id) {
-    final f = _fish.firstWhere((x) => x.id == id);
+    final idx = _fish.indexWhere((x) => x.id == id);
+    if (idx < 0) return;
+    final f = _fish[idx];
     if (f.letter == _target) {
       _caught++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish(_target);
       _letterIdx++;
       if (_letterIdx % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
-      if (_letterIdx >= 26) { _sfx.playFanfare(); _audio.speakEnglish('All letters!'); setState(() {}); return; }
+      if (_letterIdx >= 26) {
+        _sfx.playFanfare();
+        _audio.speakEnglish('All letters!');
+        showRewardOverlay(context, message: 'All Letters\nCaught!');
+        setState(() {});
+        return;
+      }
       _fish.removeWhere((x) => x.id == id);
       _addRandomFish();
       _nextTarget();
@@ -96,7 +111,8 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
     do { l = _letters[_random.nextInt(26)]; } while (l == _target && _fish.any((f) => f.letter == _target));
     _fish.add(_Fish(
       id: _nextId++, letter: l,
-      x: _random.nextDouble() * 280 + 20, y: _random.nextDouble() * 350 + 50,
+      x: 20 + _random.nextDouble() * (_pondW - 80),
+      y: 20 + _random.nextDouble() * (_pondH - 80),
       speed: 0.4 + _random.nextDouble() * 0.6,
       dir: _random.nextBool() ? 1 : -1,
     ));
@@ -155,7 +171,10 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.blue.shade200, width: 2),
       ),
-      child: Stack(children: _fish.map((f) => Positioned(
+      child: LayoutBuilder(builder: (context, constraints) {
+        _pondW = constraints.maxWidth;
+        _pondH = constraints.maxHeight;
+        return Stack(children: _fish.map((f) => Positioned(
         left: f.x, top: f.y,
         child: GestureDetector(
           onTap: () => _tapFish(f.id),
@@ -167,7 +186,8 @@ class _LetterFishingGameState extends State<LetterFishingGame> {
             )),
           ),
         ),
-      )).toList()),
+      )).toList());
+      }),
     ),
   );
 

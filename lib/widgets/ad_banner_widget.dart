@@ -16,6 +16,7 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   @override
   void initState() {
     super.initState();
+    if (!AdService().adsEnabled) return;
     AdService().loadBanner(
       onAdLoaded: (ad) {
         if (mounted) {

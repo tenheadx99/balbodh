@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class WordWormGame extends StatefulWidget {
   const WordWormGame({super.key});
@@ -14,6 +16,7 @@ class WordWormGame extends StatefulWidget {
 class _WordWormGameState extends State<WordWormGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   static const _words = [
@@ -58,9 +61,14 @@ class _WordWormGameState extends State<WordWormGame> {
     if (l == _missing) {
       _done++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish(_word);
-      if (_done % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
+      if (_done % 5 == 0) {
+        _level++;
+        _audio.speakEnglish('Level $_level!');
+        showRewardOverlay(context, message: 'Level $_level!');
+      }
       _nextWord();
     } else {
       _sfx.playWrong();

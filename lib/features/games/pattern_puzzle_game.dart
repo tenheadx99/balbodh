@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/audio/audio_service.dart';
 import '../../core/audio/sound_effect_service.dart';
+import '../../games/reward_overlay.dart';
+import '../../services/progress_service.dart';
 
 class PatternPuzzleGame extends StatefulWidget {
   const PatternPuzzleGame({super.key});
@@ -14,6 +16,7 @@ class PatternPuzzleGame extends StatefulWidget {
 class _PatternPuzzleGameState extends State<PatternPuzzleGame> {
   final AudioService _audio = AudioService();
   final SoundEffectService _sfx = SoundEffectService();
+  final ProgressService _progress = ProgressService();
   final Random _random = Random();
 
   static const _emojis = ['🔴', '🔵', '🟡', '🟢', '🟠', '🟣', '⬛', '⬜'];
@@ -34,12 +37,9 @@ class _PatternPuzzleGameState extends State<PatternPuzzleGame> {
 
   void _newPattern() {
     final useEmoji = _random.nextBool();
-    final pool = useEmoji ? _emojis : _letters;
-    final len = 3 + _random.nextInt(2);
-    _pattern = [];
-    for (int i = 0; i < len; i++) {
-      _pattern.add(pool[_random.nextInt(pool.length)]);
-    }
+    // Shuffle so patterns vary instead of always using the pool's
+    // first symbols.
+    final pool = List.of(useEmoji ? _emojis : _letters)..shuffle(_random);
 
     final patternType = _random.nextInt(3);
     switch (patternType) {
@@ -73,9 +73,14 @@ class _PatternPuzzleGameState extends State<PatternPuzzleGame> {
     if (c == _correctAnswer) {
       _done++;
       _stars++;
+      _progress.addStar('games');
       _sfx.playCorrect();
       _audio.speakEnglish('Correct! Pattern complete!');
-      if (_done % 5 == 0) { _level++; _audio.speakEnglish('Level $_level!'); }
+      if (_done % 5 == 0) {
+        _level++;
+        _audio.speakEnglish('Level $_level!');
+        showRewardOverlay(context, message: 'Level $_level!');
+      }
       _newPattern();
     } else {
       _sfx.playWrong();

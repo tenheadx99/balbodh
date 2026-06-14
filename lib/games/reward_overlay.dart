@@ -2,6 +2,25 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../core/constants/colors.dart';
 
+/// Shows a [RewardOverlay] above the current screen and removes it
+/// automatically when its animation completes.
+void showRewardOverlay(
+  BuildContext context, {
+  String message = 'Great Job!',
+  bool showConfetti = true,
+}) {
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (_) => RewardOverlay(
+      message: message,
+      showConfetti: showConfetti,
+      onComplete: () => entry.remove(),
+    ),
+  );
+  overlay.insert(entry);
+}
+
 class RewardOverlay extends StatefulWidget {
   final String message;
   final bool showConfetti;
